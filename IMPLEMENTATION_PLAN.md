@@ -41,3 +41,4 @@
 - `scripts\test.ps1`：8/8 項核心服務測試通過，包含 PNG↔JPG 轉檔後的來源 SHA-256 不變、影片流水號、長圖分頁與索引新增／刪除。
 - `scripts\qa.ps1`：Release 建置 0 警告、0 錯誤；核心服務測試 8/8 通過。
 - `scripts\build.ps1`：成功建立 `dist\PoliceImageToolkit.exe`；SHA-256 與 `dist\SHA256SUMS.txt` 相符。
+- **發布結案判定**：本實作計畫工作項目已 100% 交付，v11.4.0 正式完成驗證並收斂結案，專案進入 Stable / Maintenance。

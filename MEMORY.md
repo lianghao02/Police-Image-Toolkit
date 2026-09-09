@@ -110,7 +110,7 @@
 
 ---
 
-## 🔮 5. 下一版規劃路線圖 (Roadmap for v11.4.0)
+## 🔮 5. 未來規劃路線圖 (Roadmap)
 
 1. **Photo-Report-Generator 匯入索引**：由下游工具讀取既有 `report_index.json`，協助帶入圖片與來源資訊；需於該 Repository 另案實作。
 2. **手機螢幕滑鼠滾輪步進（Mouse Wheel Scrubbing）**：游標置於手機框時滾輪向上/向下直接前後 0.1 秒步進，達成「右手滾輪定位、左手 Space 秒截」極速盲操。
