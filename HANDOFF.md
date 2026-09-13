@@ -1,12 +1,22 @@
 # 當前交接狀態 (Current Handoff)
 
-- **本輪目標**：正式發布 v11.4.0，收斂「輸出追溯索引 `report_index.json`」功能與版本文件，不新增新功能。
+- **本輪目標**：針對警政鑑識公務人員使用情境，將全系統 UI/UX 全面重構升級為「現代專業柔和淺色調（Light Morandi / 莫蘭迪冷灰與霧藍）」，徹底解決 WPF 文字發虛問題，建立一致元件尺寸標準，並深化商業級視覺與操作 UX。
 - **已完成**：
-  - 正式版本同步為 `v11.4.0`（包含 `version.txt`、`PoliceImageToolkit.csproj`、`README.md`、`CHANGELOG.md`、`build.ps1`）。
-  - 三個工具的輸出資料夾皆會以原子方式建立或更新 `report_index.json`；索引只保存輸出檔名、來源檔名、工具類型、影片時間（如適用）與像素尺寸。影片截圖復原／刪除時會同步移除對應索引項目；自訂輸出時的「開啟截圖資料夾」會前往實際 `<影片名>_Snapshots` 資料夾。
-  - 清理未被引用的歷史單次發布檔（`scripts/release_notes_v11.2.0.md`）。
-  - Release Gate 通過：自動化測試 8/8 PASS、QA 檢核 PASS、單檔發布與雜湊驗證 PASS。
-- **刻意未修改（保留範圍）**：工具分頁入口、影片解碼與逐格截圖核心、長圖切分演算法、Photo-Report-Generator Repository。
-- **驗證結果與測試證據**：`scripts\test.ps1` 與 `scripts\qa.ps1` 皆為 8/8 通過；QA 的 Release 建置 0 警告、0 錯誤。`scripts\build.ps1` 成功建立單檔 EXE，SHA-256 與清單一致。
-- **已知事項與注意事項**：Photo-Report-Generator 目前僅讀取自身專案檔，讀取 `report_index.json` 由下游專案另行規劃。HEIC／WebP 本機解碼仰賴 Windows WIC Codec。
-- **目前狀態判定**：Stable / Maintenance（P1 = 0，v11.4.0 正式完成發布）
+  - **字型清晰度與底層渲染重構**：在 `App.xaml` 與 `MainWindow.xaml` 頂層及全域 TextBlock 注入 `TextFormattingMode="Display"` 與 `TextRenderingMode="ClearType"`，並啟用 `UseLayoutRounding="True"` 與 `SnapsToDevicePixels="True"`，徹底根治 Windows/WPF 中文字筆畫模糊發虛問題。
+  - **現代莫蘭迪淺色 Design Tokens**：全域定義冷灰底色（`#F1F4F8` / `#E5EBF2`）、純白卡片（`#FFFFFF`）、深板岩文字（`#1E293B` / `#64748B`）、霧藍主色（`#3E5E7A`）、鼠尾草綠成功色（`#347555`）與赭紅警告色（`#B94A4A`），營造專業、克制且長時間辦案不眩光的視覺體驗。
+  - **表單與按鈕規格標準化**：輸入框高度統一為 32px、圓角 5px、水平邊距 8px、垂直置中，具備 Focus 微厚邊框提示；按鈕高度統一為 32px（緊湊操作 24~26px），支援 Hover 柔和色過渡與點擊手感位移；頂部導航分頁升級為 Segmented Control 膠囊底槽與白底浮動選中卡片。
+  - **三大功能工作台 UX 深化**：
+    - **手機圖片批次轉檔**：空狀態升級為大面積淺灰虛線拖曳熱區，展示四大手機照片格式膠囊 Badge（HEIC、WebP、JPG、PNG/BMP）；轉檔清單採交錯灰底與成功進度狀態。
+    - **手機影片逐格截圖**：打造擬真深色手機外框與柔和待機提示；影片播放控制列與快捷鍵整合；快照與已審核證物清單左右等高對齊。
+    - **手機長截圖分頁輔助**：擬真手機捲動外框；報告書圖框規格集中化並提供公務標準提示（8 × 17.5 cm / 重疊 5 mm）；分頁清單改為卡片式徽章與明確流水號標記。
+  - **工程驗證與發布**：核心單元測試 `scripts/test.ps1` 8/8 PASS；QA 完整檢驗 `scripts/qa.ps1` PASS（Git diff 行尾無贅餘空格、無機敏資訊洩漏、Release 建置 0 警告 0 錯誤）；單檔發布 `scripts/build.ps1` 產出 `dist/PoliceImageToolkit.exe`（68.62 MB），通過本機獨立進程 Smoke Test 啟動測試。
+- **刻意未修改（保留範圍）**：核心轉檔管線（SkiaSharp / Magick.NET）、影片逐格解碼演算法、長截圖切分幾何演算法、`report_index.json` 追溯結構。
+- **驗證結果與測試證據**：
+  - `scripts/test.ps1`：8/8 項測試全數通過。
+  - `scripts/qa.ps1`：Git diff format check passed, sensitive scan clear, C# build 0 warning / 0 error.
+  - Smoke Test：`dist/PoliceImageToolkit.exe` 啟動 3 秒輪詢正常，可正常運作並安全退出。
+- **Git 狀態**：
+  - Commit：`fa23a00` (`design: 全面升級現代專業柔和淺色調莫蘭迪介面與清晰度`)
+  - Branch：`main` (ahead of 'origin/main' by 1 commit)
+  - Working Tree：Clean (HANDOFF.md 即將提交)
+- **目前狀態判定**：可交付 (Deliverable)
