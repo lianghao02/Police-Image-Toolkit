@@ -8,35 +8,43 @@
         mc:Ignorable="d"
         Title="{Binding AppTitle}"
         Icon="app.ico"
-        Height="780" Width="1100"
-        MinHeight="600" MinWidth="850"
+        Height="780" Width="1120"
+        MinHeight="620" MinWidth="880"
         WindowStartupLocation="CenterScreen"
         Background="{StaticResource BgPrimary}"
         Foreground="{StaticResource TextPrimary}"
-        FontFamily="{StaticResource AppFont}">
+        FontFamily="{StaticResource AppFont}"
+        UseLayoutRounding="True"
+        SnapsToDevicePixels="True"
+        TextOptions.TextFormattingMode="Display"
+        TextOptions.TextRenderingMode="ClearType"
+        RenderOptions.ClearTypeHint="Enabled">
 
     <Window.Resources>
-        <!-- 導航單選按鈕樣式 (必須置於使用處前) -->
+        <!-- 現代膠囊分段導航單選按鈕樣式 (Segmented Tabs) -->
         <Style x:Key="NavRadioButtonStyle" TargetType="RadioButton">
             <Setter Property="Foreground" Value="{StaticResource TextSecondary}"/>
             <Setter Property="FontSize" Value="13"/>
             <Setter Property="FontWeight" Value="SemiBold"/>
             <Setter Property="Cursor" Value="Hand"/>
-            <Setter Property="Padding" Value="14,8"/>
+            <Setter Property="Padding" Value="16,6"/>
+            <Setter Property="Height" Value="32"/>
             <Setter Property="Template">
                 <Setter.Value>
                     <ControlTemplate TargetType="RadioButton">
-                        <Border x:Name="border" Background="Transparent" CornerRadius="6" Padding="{TemplateBinding Padding}">
+                        <Border x:Name="border" Background="Transparent" CornerRadius="6" Padding="{TemplateBinding Padding}" SnapsToDevicePixels="True">
                             <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
                         </Border>
                         <ControlTemplate.Triggers>
                             <Trigger Property="IsMouseOver" Value="True">
-                                <Setter TargetName="border" Property="Background" Value="{StaticResource BgCard}"/>
+                                <Setter TargetName="border" Property="Background" Value="#EDF2F7"/>
                                 <Setter Property="Foreground" Value="{StaticResource TextPrimary}"/>
                             </Trigger>
                             <Trigger Property="IsChecked" Value="True">
-                                <Setter TargetName="border" Property="Background" Value="{StaticResource AccentPrimary}"/>
-                                <Setter Property="Foreground" Value="White"/>
+                                <Setter TargetName="border" Property="Background" Value="{StaticResource BgCard}"/>
+                                <Setter Property="Foreground" Value="{StaticResource AccentPrimary}"/>
+                                <Setter TargetName="border" Property="BorderBrush" Value="{StaticResource BorderColor}"/>
+                                <Setter TargetName="border" Property="BorderThickness" Value="1"/>
                             </Trigger>
                         </ControlTemplate.Triggers>
                     </ControlTemplate>
@@ -57,7 +65,7 @@
         </Grid.RowDefinitions>
 
         <!-- 頂部現代導航標題列 -->
-        <Border Grid.Row="0" Background="{StaticResource BgSecondary}" BorderBrush="{StaticResource BorderColor}" BorderThickness="0,0,0,1" Padding="16,0">
+        <Border Grid.Row="0" Background="{StaticResource BgCard}" BorderBrush="{StaticResource BorderColor}" BorderThickness="0,0,0,1" Padding="16,0">
             <Grid>
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="Auto"/>
@@ -67,46 +75,50 @@
 
                 <!-- 軟體 Logo 與標題 -->
                 <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center">
-                    <Border Width="30" Height="30" CornerRadius="7" ClipToBounds="True" Margin="0,0,10,0" VerticalAlignment="Center">
+                    <Border Width="32" Height="32" CornerRadius="7" ClipToBounds="True" Margin="0,0,10,0" VerticalAlignment="Center" BorderBrush="{StaticResource BorderColor}" BorderThickness="1">
                         <Image Source="app_icon.png" Stretch="UniformToFill"/>
                     </Border>
                     <StackPanel VerticalAlignment="Center">
-                        <TextBlock Text="Police-Image-Toolkit" Style="{StaticResource Heading1TextStyle}" FontSize="18"/>
+                        <TextBlock Text="Police-Image-Toolkit" Style="{StaticResource Heading1TextStyle}" FontSize="16"/>
                         <TextBlock Text="{Binding CurrentVersionDisplay, StringFormat='警務手機影像轉檔與逐格截圖系統 ({0})'}" Style="{StaticResource HelperTextStyle}"/>
                     </StackPanel>
                 </StackPanel>
 
-                <!-- 導航分頁切換按鈕 (Tab Buttons) -->
-                <StackPanel Grid.Column="1" Orientation="Horizontal" HorizontalAlignment="Center" VerticalAlignment="Center">
-                    <!-- 圖片轉檔分頁鈕 -->
-                    <RadioButton x:Name="TabImage" Content="📁 手機圖片批次轉檔" IsChecked="True" 
-                                 GroupName="NavTabs" Checked="TabImage_Checked"
-                                 Style="{StaticResource NavRadioButtonStyle}" Margin="0,0,8,0"/>
+                <!-- 導航分頁切換按鈕 (膠囊分段底槽) -->
+                <Border Grid.Column="1" HorizontalAlignment="Center" VerticalAlignment="Center"
+                        Background="#E2E8F0" CornerRadius="8" Padding="3" BorderBrush="{StaticResource BorderColorLight}" BorderThickness="1">
+                    <StackPanel Orientation="Horizontal">
+                        <!-- 圖片轉檔分頁鈕 -->
+                        <RadioButton x:Name="TabImage" Content="📁 手機圖片批次轉檔" IsChecked="True"
+                                     GroupName="NavTabs" Checked="TabImage_Checked"
+                                     Style="{StaticResource NavRadioButtonStyle}" Margin="0,0,3,0"/>
 
-                    <!-- 影片截圖分頁鈕 -->
-                    <RadioButton x:Name="TabVideo" Content="🎬 手機影片逐格截圖" 
-                                  GroupName="NavTabs" Checked="TabVideo_Checked"
-                                  Style="{StaticResource NavRadioButtonStyle}" Margin="0,0,8,0"/>
+                        <!-- 影片截圖分頁鈕 -->
+                        <RadioButton x:Name="TabVideo" Content="🎬 手機影片逐格截圖"
+                                      GroupName="NavTabs" Checked="TabVideo_Checked"
+                                      Style="{StaticResource NavRadioButtonStyle}" Margin="0,0,3,0"/>
 
-                    <RadioButton x:Name="TabLongScreenshot" Content="📱 長截圖分頁輔助"
-                                  GroupName="NavTabs" Checked="TabLongScreenshot_Checked"
-                                  Style="{StaticResource NavRadioButtonStyle}"/>
-                </StackPanel>
+                        <!-- 長截圖分頁鈕 -->
+                        <RadioButton x:Name="TabLongScreenshot" Content="📱 長截圖分頁輔助"
+                                      GroupName="NavTabs" Checked="TabLongScreenshot_Checked"
+                                      Style="{StaticResource NavRadioButtonStyle}"/>
+                    </StackPanel>
+                </Border>
 
                 <!-- 右側版本徽章與檢查更新按鈕 -->
                 <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">
                     <!-- 版本徽章 (讀取自 version.txt) -->
-                    <Border Background="{StaticResource BgCard}" BorderBrush="{StaticResource BorderColor}" BorderThickness="1" 
-                            CornerRadius="12" Padding="9,4" Margin="0,0,8,0" VerticalAlignment="Center" ToolTip="目前安裝版本 (version.txt)">
+                    <Border Background="{StaticResource BgSecondary}" BorderBrush="{StaticResource BorderColor}" BorderThickness="1"
+                            CornerRadius="12" Padding="10,3" Margin="0,0,8,0" VerticalAlignment="Center" ToolTip="目前安裝版本 (version.txt)">
                         <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
                             <TextBlock Text="🏷️ " FontSize="10" VerticalAlignment="Center"/>
-                            <TextBlock Text="{Binding CurrentVersionDisplay}" FontSize="11" FontWeight="SemiBold" Foreground="{StaticResource AccentPrimary}" VerticalAlignment="Center"/>
+                            <TextBlock Text="{Binding CurrentVersionDisplay}" FontSize="11" FontWeight="Bold" Foreground="{StaticResource AccentPrimary}" VerticalAlignment="Center"/>
                         </StackPanel>
                     </Border>
 
                     <!-- 檢查更新按鈕 -->
-                    <Button Command="{Binding CheckUpdateCommand}" Style="{StaticResource SecondaryButtonStyle}" 
-                            Padding="10,5" FontSize="11" VerticalAlignment="Center" ToolTip="連線 GitHub Release 檢查是否有新版本">
+                    <Button Command="{Binding CheckUpdateCommand}" Style="{StaticResource SecondaryButtonStyle}"
+                            Padding="10,0" Height="28" FontSize="11" VerticalAlignment="Center" ToolTip="連線 GitHub Release 檢查是否有新版本">
                         <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
                             <TextBlock Text="🔄 檢查更新" VerticalAlignment="Center"/>
                         </StackPanel>

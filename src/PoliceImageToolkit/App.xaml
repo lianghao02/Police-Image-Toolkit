@@ -10,20 +10,24 @@
         <local:CountToVisibilityHiddenConverter x:Key="CountToVisHiddenConverter"/>
         <local:NullToVisibilityConverter x:Key="NullToVisConverter"/>
 
-        <!-- 主題色系定義 (現代深色/警務石板灰設計) -->
-        <SolidColorBrush x:Key="BgPrimary" Color="#0F172A"/>
-        <SolidColorBrush x:Key="BgSecondary" Color="#1E293B"/>
-        <SolidColorBrush x:Key="BgCard" Color="#334155"/>
-        <SolidColorBrush x:Key="BgInput" Color="#1E293B"/>
-        <SolidColorBrush x:Key="BorderColor" Color="#475569"/>
-        <SolidColorBrush x:Key="TextPrimary" Color="#F8FAFC"/>
-        <SolidColorBrush x:Key="TextSecondary" Color="#94A3B8"/>
-        <SolidColorBrush x:Key="AccentPrimary" Color="#3B82F6"/>
-        <SolidColorBrush x:Key="AccentHover" Color="#2563EB"/>
-        <SolidColorBrush x:Key="AccentSuccess" Color="#10B981"/>
-        <SolidColorBrush x:Key="AccentSuccessHover" Color="#059669"/>
-        <SolidColorBrush x:Key="AccentDanger" Color="#EF4444"/>
-        <SolidColorBrush x:Key="AccentDangerHover" Color="#DC2626"/>
+        <!-- 主題色系定義 (現代專業柔和淺色調 / 莫蘭迪冷灰與霧藍) -->
+        <SolidColorBrush x:Key="BgPrimary" Color="#F1F4F8"/>
+        <SolidColorBrush x:Key="BgSecondary" Color="#E5EBF2"/>
+        <SolidColorBrush x:Key="BgCard" Color="#FFFFFF"/>
+        <SolidColorBrush x:Key="BgInput" Color="#FFFFFF"/>
+        <SolidColorBrush x:Key="BorderColor" Color="#CBD5E1"/>
+        <SolidColorBrush x:Key="BorderColorLight" Color="#E2E8F0"/>
+        <SolidColorBrush x:Key="BorderColorFocus" Color="#4A6B82"/>
+        <SolidColorBrush x:Key="TextPrimary" Color="#1E293B"/>
+        <SolidColorBrush x:Key="TextSecondary" Color="#64748B"/>
+        <SolidColorBrush x:Key="TextMuted" Color="#94A3B8"/>
+        <SolidColorBrush x:Key="AccentPrimary" Color="#3E5E7A"/>
+        <SolidColorBrush x:Key="AccentHover" Color="#304C63"/>
+        <SolidColorBrush x:Key="AccentSuccess" Color="#347555"/>
+        <SolidColorBrush x:Key="AccentSuccessHover" Color="#295D43"/>
+        <SolidColorBrush x:Key="AccentDanger" Color="#B94A4A"/>
+        <SolidColorBrush x:Key="AccentDangerHover" Color="#993838"/>
+        <SolidColorBrush x:Key="PhoneFrameColor" Color="#2A323D"/>
 
         <!-- 全域字型 -->
         <FontFamily x:Key="AppFont">Microsoft JhengHei UI, Microsoft JhengHei, Segoe UI, sans-serif</FontFamily>
@@ -31,23 +35,29 @@
         <!-- 文字層級：H1 應用程式名稱、H2 工作區名稱、H3 卡片標題、標籤與輔助文字 -->
         <Style x:Key="Heading1TextStyle" TargetType="TextBlock">
             <Setter Property="FontFamily" Value="{StaticResource AppFont}"/>
-            <Setter Property="FontSize" Value="20"/>
+            <Setter Property="FontSize" Value="17"/>
             <Setter Property="FontWeight" Value="Bold"/>
             <Setter Property="Foreground" Value="{StaticResource TextPrimary}"/>
+            <Setter Property="TextOptions.TextFormattingMode" Value="Display"/>
+            <Setter Property="TextOptions.TextRenderingMode" Value="ClearType"/>
         </Style>
 
         <Style x:Key="Heading2TextStyle" TargetType="TextBlock">
             <Setter Property="FontFamily" Value="{StaticResource AppFont}"/>
-            <Setter Property="FontSize" Value="16"/>
+            <Setter Property="FontSize" Value="15"/>
             <Setter Property="FontWeight" Value="Bold"/>
             <Setter Property="Foreground" Value="{StaticResource TextPrimary}"/>
+            <Setter Property="TextOptions.TextFormattingMode" Value="Display"/>
+            <Setter Property="TextOptions.TextRenderingMode" Value="ClearType"/>
         </Style>
 
         <Style x:Key="Heading3TextStyle" TargetType="TextBlock">
             <Setter Property="FontFamily" Value="{StaticResource AppFont}"/>
-            <Setter Property="FontSize" Value="14"/>
+            <Setter Property="FontSize" Value="13"/>
             <Setter Property="FontWeight" Value="SemiBold"/>
             <Setter Property="Foreground" Value="{StaticResource TextPrimary}"/>
+            <Setter Property="TextOptions.TextFormattingMode" Value="Display"/>
+            <Setter Property="TextOptions.TextRenderingMode" Value="ClearType"/>
         </Style>
 
         <Style x:Key="FormLabelTextStyle" TargetType="TextBlock">
@@ -55,39 +65,112 @@
             <Setter Property="FontSize" Value="12"/>
             <Setter Property="FontWeight" Value="SemiBold"/>
             <Setter Property="Foreground" Value="{StaticResource TextPrimary}"/>
+            <Setter Property="TextOptions.TextFormattingMode" Value="Display"/>
+            <Setter Property="TextOptions.TextRenderingMode" Value="ClearType"/>
         </Style>
 
         <Style x:Key="HelperTextStyle" TargetType="TextBlock">
             <Setter Property="FontFamily" Value="{StaticResource AppFont}"/>
             <Setter Property="FontSize" Value="11"/>
             <Setter Property="Foreground" Value="{StaticResource TextSecondary}"/>
+            <Setter Property="TextOptions.TextFormattingMode" Value="Display"/>
+            <Setter Property="TextOptions.TextRenderingMode" Value="ClearType"/>
         </Style>
 
-        <!-- 基礎按鈕樣式 -->
+        <!-- 全域 TextBlock 基礎預設值 -->
+        <Style TargetType="TextBlock">
+            <Setter Property="FontFamily" Value="{StaticResource AppFont}"/>
+            <Setter Property="TextOptions.TextFormattingMode" Value="Display"/>
+            <Setter Property="TextOptions.TextRenderingMode" Value="ClearType"/>
+        </Style>
+
+        <!-- 全域 TextBox 現代微陰影樣式 -->
+        <Style TargetType="TextBox">
+            <Setter Property="FontFamily" Value="{StaticResource AppFont}"/>
+            <Setter Property="FontSize" Value="12"/>
+            <Setter Property="Foreground" Value="{StaticResource TextPrimary}"/>
+            <Setter Property="Background" Value="{StaticResource BgInput}"/>
+            <Setter Property="BorderBrush" Value="{StaticResource BorderColor}"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="Padding" Value="8,5"/>
+            <Setter Property="Height" Value="32"/>
+            <Setter Property="VerticalContentAlignment" Value="Center"/>
+            <Setter Property="TextOptions.TextFormattingMode" Value="Display"/>
+            <Setter Property="TextOptions.TextRenderingMode" Value="ClearType"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="TextBox">
+                        <Border x:Name="border"
+                                Background="{TemplateBinding Background}"
+                                BorderBrush="{TemplateBinding BorderBrush}"
+                                BorderThickness="{TemplateBinding BorderThickness}"
+                                CornerRadius="5"
+                                SnapsToDevicePixels="True">
+                            <ScrollViewer x:Name="PART_ContentHost" Focusable="False" HorizontalScrollBarVisibility="Hidden" VerticalScrollBarVisibility="Hidden"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="border" Property="BorderBrush" Value="{StaticResource AccentPrimary}"/>
+                            </Trigger>
+                            <Trigger Property="IsFocused" Value="True">
+                                <Setter TargetName="border" Property="BorderBrush" Value="{StaticResource BorderColorFocus}"/>
+                                <Setter TargetName="border" Property="BorderThickness" Value="1.5"/>
+                            </Trigger>
+                            <Trigger Property="IsEnabled" Value="False">
+                                <Setter TargetName="border" Property="Opacity" Value="0.6"/>
+                                <Setter TargetName="border" Property="Background" Value="#F8FAFC"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <!-- 全域 ComboBox 現代扁平樣式 -->
+        <Style TargetType="ComboBox">
+            <Setter Property="FontFamily" Value="{StaticResource AppFont}"/>
+            <Setter Property="FontSize" Value="12"/>
+            <Setter Property="Foreground" Value="{StaticResource TextPrimary}"/>
+            <Setter Property="Background" Value="{StaticResource BgInput}"/>
+            <Setter Property="BorderBrush" Value="{StaticResource BorderColor}"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="Height" Value="32"/>
+            <Setter Property="VerticalContentAlignment" Value="Center"/>
+            <Setter Property="Padding" Value="8,4"/>
+        </Style>
+
+        <!-- 基礎按鈕樣式 (Primary) -->
         <Style x:Key="PrimaryButtonStyle" TargetType="Button">
             <Setter Property="FontFamily" Value="{StaticResource AppFont}"/>
-            <Setter Property="FontSize" Value="14"/>
+            <Setter Property="FontSize" Value="13"/>
             <Setter Property="FontWeight" Value="SemiBold"/>
             <Setter Property="Foreground" Value="White"/>
             <Setter Property="Background" Value="{StaticResource AccentPrimary}"/>
             <Setter Property="BorderThickness" Value="0"/>
-            <Setter Property="Padding" Value="16,8"/>
+            <Setter Property="Padding" Value="14,6"/>
+            <Setter Property="Height" Value="32"/>
             <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="TextOptions.TextFormattingMode" Value="Display"/>
+            <Setter Property="TextOptions.TextRenderingMode" Value="ClearType"/>
             <Setter Property="Template">
                 <Setter.Value>
                     <ControlTemplate TargetType="Button">
                         <Border x:Name="border"
                                 Background="{TemplateBinding Background}"
-                                CornerRadius="6"
-                                Padding="{TemplateBinding Padding}">
+                                CornerRadius="5"
+                                Padding="{TemplateBinding Padding}"
+                                SnapsToDevicePixels="True">
                             <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
                         </Border>
                         <ControlTemplate.Triggers>
                             <Trigger Property="IsMouseOver" Value="True">
                                 <Setter TargetName="border" Property="Background" Value="{StaticResource AccentHover}"/>
                             </Trigger>
+                            <Trigger Property="IsPressed" Value="True">
+                                <Setter TargetName="border" Property="Opacity" Value="0.9"/>
+                            </Trigger>
                             <Trigger Property="IsEnabled" Value="False">
-                                <Setter TargetName="border" Property="Opacity" Value="0.5"/>
+                                <Setter TargetName="border" Property="Opacity" Value="0.45"/>
                             </Trigger>
                         </ControlTemplate.Triggers>
                     </ControlTemplate>
@@ -102,16 +185,20 @@
                     <ControlTemplate TargetType="Button">
                         <Border x:Name="border"
                                 Background="{TemplateBinding Background}"
-                                CornerRadius="6"
-                                Padding="{TemplateBinding Padding}">
+                                CornerRadius="5"
+                                Padding="{TemplateBinding Padding}"
+                                SnapsToDevicePixels="True">
                             <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
                         </Border>
                         <ControlTemplate.Triggers>
                             <Trigger Property="IsMouseOver" Value="True">
                                 <Setter TargetName="border" Property="Background" Value="{StaticResource AccentSuccessHover}"/>
                             </Trigger>
+                            <Trigger Property="IsPressed" Value="True">
+                                <Setter TargetName="border" Property="Opacity" Value="0.9"/>
+                            </Trigger>
                             <Trigger Property="IsEnabled" Value="False">
-                                <Setter TargetName="border" Property="Opacity" Value="0.5"/>
+                                <Setter TargetName="border" Property="Opacity" Value="0.45"/>
                             </Trigger>
                         </ControlTemplate.Triggers>
                     </ControlTemplate>
@@ -126,16 +213,20 @@
                     <ControlTemplate TargetType="Button">
                         <Border x:Name="border"
                                 Background="{TemplateBinding Background}"
-                                CornerRadius="6"
-                                Padding="{TemplateBinding Padding}">
+                                CornerRadius="5"
+                                Padding="{TemplateBinding Padding}"
+                                SnapsToDevicePixels="True">
                             <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
                         </Border>
                         <ControlTemplate.Triggers>
                             <Trigger Property="IsMouseOver" Value="True">
                                 <Setter TargetName="border" Property="Background" Value="{StaticResource AccentDangerHover}"/>
                             </Trigger>
+                            <Trigger Property="IsPressed" Value="True">
+                                <Setter TargetName="border" Property="Opacity" Value="0.9"/>
+                            </Trigger>
                             <Trigger Property="IsEnabled" Value="False">
-                                <Setter TargetName="border" Property="Opacity" Value="0.5"/>
+                                <Setter TargetName="border" Property="Opacity" Value="0.45"/>
                             </Trigger>
                         </ControlTemplate.Triggers>
                     </ControlTemplate>
@@ -155,16 +246,21 @@
                                 Background="{TemplateBinding Background}"
                                 BorderBrush="{TemplateBinding BorderBrush}"
                                 BorderThickness="{TemplateBinding BorderThickness}"
-                                CornerRadius="6"
-                                Padding="{TemplateBinding Padding}">
+                                CornerRadius="5"
+                                Padding="{TemplateBinding Padding}"
+                                SnapsToDevicePixels="True">
                             <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
                         </Border>
                         <ControlTemplate.Triggers>
                             <Trigger Property="IsMouseOver" Value="True">
-                                <Setter TargetName="border" Property="Background" Value="{StaticResource BorderColor}"/>
+                                <Setter TargetName="border" Property="Background" Value="#F8FAFC"/>
+                                <Setter TargetName="border" Property="BorderBrush" Value="{StaticResource AccentPrimary}"/>
+                            </Trigger>
+                            <Trigger Property="IsPressed" Value="True">
+                                <Setter TargetName="border" Property="Background" Value="#E2E8F0"/>
                             </Trigger>
                             <Trigger Property="IsEnabled" Value="False">
-                                <Setter TargetName="border" Property="Opacity" Value="0.5"/>
+                                <Setter TargetName="border" Property="Opacity" Value="0.45"/>
                             </Trigger>
                         </ControlTemplate.Triggers>
                     </ControlTemplate>
@@ -172,13 +268,22 @@
             </Setter>
         </Style>
 
-        <!-- 卡片邊框樣式 -->
+        <!-- 卡片邊框樣式 (柔和白底卡片 + 淺灰邊框 + 圓角) -->
         <Style x:Key="CardBorderStyle" TargetType="Border">
-            <Setter Property="Background" Value="{StaticResource BgSecondary}"/>
+            <Setter Property="Background" Value="{StaticResource BgCard}"/>
             <Setter Property="BorderBrush" Value="{StaticResource BorderColor}"/>
             <Setter Property="BorderThickness" Value="1"/>
             <Setter Property="CornerRadius" Value="8"/>
-            <Setter Property="Padding" Value="16"/>
+            <Setter Property="Padding" Value="14"/>
+            <Setter Property="SnapsToDevicePixels" Value="True"/>
+        </Style>
+
+        <!-- 柔和進度條樣式 -->
+        <Style TargetType="ProgressBar">
+            <Setter Property="Foreground" Value="{StaticResource AccentSuccess}"/>
+            <Setter Property="Background" Value="#E2E8F0"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="Height" Value="8"/>
         </Style>
     </Application.Resources>
 </Application>
