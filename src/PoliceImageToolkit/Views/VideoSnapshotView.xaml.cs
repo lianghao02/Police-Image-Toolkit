@@ -12,7 +12,10 @@ namespace PoliceImageToolkit.Views;
 
 public partial class VideoSnapshotView : UserControl
 {
-    private const double WideWorkspaceMinWidth = 1450;
+    // 介面寬度達此值時，右側改為「對照圖｜設定＋清單」雙欄，讓直式對照圖與清單都保有足夠高度。
+    private const double WideWorkspaceMinWidth = 1100;
+    // 窄版上下堆疊時右側的最低總高度；視窗較矮時改由外層 ScrollViewer 捲動，避免清單被擠到看不見。
+    private const double StackedWorkspaceMinHeight = 700;
     private readonly DispatcherTimer _timer;
     private bool _isUserDraggingSlider = false;
     private bool? _isWideWorkspace;
@@ -45,7 +48,11 @@ public partial class VideoSnapshotView : UserControl
     private void UpdateRightWorkspaceLayout()
     {
         bool useWideWorkspace = ActualWidth >= WideWorkspaceMinWidth;
-        if (_isWideWorkspace == useWideWorkspace) return;
+        if (_isWideWorkspace == useWideWorkspace)
+        {
+            SyncRightWorkspaceHeight();
+            return;
+        }
 
         _isWideWorkspace = useWideWorkspace;
 
@@ -89,7 +96,7 @@ public partial class VideoSnapshotView : UserControl
             Grid.SetRowSpan(CompareCard, 1);
             CompareCard.Margin = new Thickness(0, 0, 0, 10);
             ComparePreview.MinHeight = 0;
-            ComparePreview.Height = 180;
+            ComparePreview.Height = 170;
 
             Grid.SetColumn(SettingsCard, 0);
             Grid.SetColumnSpan(SettingsCard, 2);
@@ -101,12 +108,30 @@ public partial class VideoSnapshotView : UserControl
             Grid.SetRow(EvidenceCard, 2);
             Grid.SetRowSpan(EvidenceCard, 1);
         }
+
+        SyncRightWorkspaceHeight();
+    }
+
+    private void RightScroll_SizeChanged(object sender, SizeChangedEventArgs e)
+    {
+        SyncRightWorkspaceHeight();
+    }
+
+    private void SyncRightWorkspaceHeight()
+    {
+        // ScrollViewer 會以無限高度量測內容，需明確指定高度，星號列才能依可視高度分配。
+        double viewportHeight = RightScroll.ActualHeight;
+        if (viewportHeight <= 0) return;
+
+        double minimumHeight = _isWideWorkspace == true ? 0 : StackedWorkspaceMinHeight;
+        RightWorkspace.Height = Math.Max(viewportHeight, minimumHeight);
     }
 
     private void VideoSnapshotView_DataContextChanged(object sender, DependencyPropertyChangedEventArgs e)
     {
         if (e.OldValue is VideoSnapshotViewModel oldVm)
         {
+            oldVm.RequestLoadVideo -= Vm_RequestLoadVideo;
             oldVm.RequestPlay -= Vm_RequestPlay;
             oldVm.RequestPause -= Vm_RequestPause;
             oldVm.RequestSeek -= Vm_RequestSeek;
@@ -116,6 +141,7 @@ public partial class VideoSnapshotView : UserControl
 
         if (e.NewValue is VideoSnapshotViewModel newVm)
         {
+            newVm.RequestLoadVideo += Vm_RequestLoadVideo;
             newVm.RequestPlay += Vm_RequestPlay;
             newVm.RequestPause += Vm_RequestPause;
             newVm.RequestSeek += Vm_RequestSeek;
@@ -127,6 +153,17 @@ public partial class VideoSnapshotView : UserControl
                 Player.Source = new Uri(newVm.VideoPath);
             }
         }
+    }
+
+    private void Vm_RequestLoadVideo(string path)
+    {
+        _timer.Stop();
+        BtnPlayPause.Content = "▶ 播放";
+        Player.Stop();
+        Player.Source = new Uri(path);
+        // MediaElement 為 Manual 模式，需 Play 後才會開啟媒體；MediaOpened 會再暫停於第一格。
+        Player.Play();
+        Player.Pause();
     }
 
     private void Vm_RequestPlay()
@@ -225,6 +262,14 @@ public partial class VideoSnapshotView : UserControl
         }
     }
 
+    private void Player_MediaFailed(object? sender, ExceptionRoutedEventArgs e)
+    {
+        _timer.Stop();
+        BtnPlayPause.Content = "▶ 播放";
+        Player.Source = null;
+        ViewModel?.MarkVideoLoadFailed(e.ErrorException?.Message ?? "系統缺少對應解碼器");
+    }
+
     private void Player_MediaEnded(object sender, RoutedEventArgs e)
     {
         Vm_RequestPause();
@@ -271,13 +316,7 @@ public partial class VideoSnapshotView : UserControl
                 string ext = Path.GetExtension(path).ToLowerInvariant();
                 if (ext is ".mov" or ".mp4" or ".m4v" or ".avi" or ".mkv" or ".webm")
                 {
-                    if (ViewModel != null)
-                    {
-                        ViewModel.LoadVideo(path);
-                        Player.Source = new Uri(path);
-                        Player.Play();
-                        Player.Pause(); // 載入第一格
-                    }
+                    ViewModel?.LoadVideo(path);
                 }
             }
         }

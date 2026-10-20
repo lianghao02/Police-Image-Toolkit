@@ -53,7 +53,10 @@ public class ImageTaskItem : ViewModelBase
     public long OutputSizeBytes
     {
         get => _outputSizeBytes;
-        set => SetProperty(ref _outputSizeBytes, value);
+        set
+        {
+            if (SetProperty(ref _outputSizeBytes, value)) OnPropertyChanged(nameof(OutputSizeFormatted));
+        }
     }
 
     public int OutputWidth

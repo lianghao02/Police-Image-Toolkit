@@ -9,7 +9,7 @@
              AllowDrop="True"
              Drop="UserControl_Drop"
              DragOver="UserControl_DragOver">
-    <Grid Margin="16">
+    <Grid Margin="14,12">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="*"/>
@@ -18,19 +18,21 @@
         </Grid.RowDefinitions>
 
         <!-- 頂部功能區 -->
-        <Border Grid.Row="0" Style="{StaticResource CardBorderStyle}" Margin="0,0,0,12" Padding="14,10">
+        <Border Grid.Row="0" Style="{StaticResource CardBorderStyle}" Margin="0,0,0,10" Padding="14,8">
             <Grid>
                 <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto"/>
                     <ColumnDefinition Width="*"/>
                     <ColumnDefinition Width="Auto"/>
                 </Grid.ColumnDefinitions>
 
-                <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                    <TextBlock Text="📁 手機圖片批次轉檔" Style="{StaticResource Heading2TextStyle}" VerticalAlignment="Center" Margin="0,0,16,0"/>
-                    <TextBlock Text="{Binding SummaryText}" FontSize="12" Foreground="{StaticResource TextSecondary}" VerticalAlignment="Center"/>
-                </StackPanel>
+                <Border Style="{StaticResource CardTitleBadgeStyle}" Margin="0,0,14,0">
+                    <TextBlock Text="📁 手機圖片批次轉檔" Style="{StaticResource Heading2TextStyle}"/>
+                </Border>
+                <TextBlock Grid.Column="1" Text="{Binding SummaryText}" Style="{StaticResource HelperTextStyle}" FontWeight="SemiBold"
+                           VerticalAlignment="Center" TextTrimming="CharacterEllipsis" Margin="0,0,10,0"/>
 
-                <StackPanel Grid.Column="1" Orientation="Horizontal" HorizontalAlignment="Right">
+                <StackPanel Grid.Column="2" Orientation="Horizontal" HorizontalAlignment="Right">
                     <Button Content="➕ 新增檔案" Command="{Binding AddFilesCommand}" Style="{StaticResource PrimaryButtonStyle}" Margin="0,0,8,0"/>
                     <Button Content="🗑️ 清空清單" Command="{Binding ClearAllCommand}" Style="{StaticResource SecondaryButtonStyle}"/>
                 </StackPanel>
@@ -38,161 +40,159 @@
         </Border>
 
         <!-- 中間任務列表 / 拖曳提示區 -->
-        <Border Grid.Row="1" Style="{StaticResource CardBorderStyle}" Margin="0,0,0,12" Padding="10">
+        <Border Grid.Row="1" Style="{StaticResource CardBorderStyle}" Margin="0,0,0,10" Padding="10">
             <Grid>
-                <!-- 當清單為空時顯示精美拖曳熱區 (Dropzone) -->
-                <Border CornerRadius="8" BorderBrush="{StaticResource BorderColor}" BorderThickness="1.5"
-                        Background="#F8FAFC"
-                        Visibility="{Binding Tasks.Count, Converter={StaticResource CountToVisHiddenConverter}}">
+                <!-- 當清單為空時顯示拖曳熱區 (Dropzone) -->
+                <Grid Visibility="{Binding Tasks.Count, Converter={StaticResource CountToVisHiddenConverter}}">
+                    <Rectangle RadiusX="14" RadiusY="14" Fill="{StaticResource BgInset}" Stroke="{StaticResource Ink}"
+                               StrokeThickness="2.5" StrokeDashArray="4 3" SnapsToDevicePixels="True"/>
                     <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center" Margin="24">
-                        <Border Width="64" Height="64" CornerRadius="32" Background="#E2E8F0" HorizontalAlignment="Center" Margin="0,0,0,14">
-                            <TextBlock Text="📥" FontSize="28" HorizontalAlignment="Center" VerticalAlignment="Center"/>
-                        </Border>
+                        <Grid Width="78" Height="78" HorizontalAlignment="Center" Margin="0,0,0,14">
+                            <Ellipse Fill="{StaticResource GoldChin}" Stroke="{StaticResource Ink}" StrokeThickness="2.5" Margin="0,5,0,0"/>
+                            <Ellipse Fill="{StaticResource GoldFace}" Stroke="{StaticResource Ink}" StrokeThickness="2.5" Margin="0,0,0,5"/>
+                            <TextBlock Text="📥" FontSize="32" HorizontalAlignment="Center" VerticalAlignment="Center" Margin="0,0,0,5"/>
+                        </Grid>
                         <TextBlock Text="將手機圖片拖曳至此處開始轉檔"
-                                   FontSize="15" FontWeight="Bold" Foreground="{StaticResource TextPrimary}" HorizontalAlignment="Center"/>
-                        <TextBlock Text="多核心平行管線處理，原生相容各廠牌手機照片"
-                                   FontSize="12" Foreground="{StaticResource TextSecondary}" HorizontalAlignment="Center" Margin="0,6,0,14"/>
+                                   FontSize="17" FontWeight="Bold" Foreground="{StaticResource TextPrimary}" HorizontalAlignment="Center"/>
+                        <TextBlock Text="多核心平行處理，支援各廠牌手機照片格式；原始檔案不會被覆寫"
+                                   Style="{StaticResource HelperTextStyle}" FontSize="13" HorizontalAlignment="Center" Margin="0,6,0,16"/>
 
                         <!-- 支援格式標籤膠囊 (Format Badges) -->
-                        <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
-                            <Border Background="#FFFFFF" BorderBrush="{StaticResource BorderColor}" BorderThickness="1" CornerRadius="4" Padding="8,3" Margin="0,0,6,0">
-                                <TextBlock Text="iPhone HEIC / HEIF" FontSize="11" FontWeight="SemiBold" Foreground="{StaticResource AccentPrimary}"/>
+                        <WrapPanel HorizontalAlignment="Center">
+                            <Border Style="{StaticResource PillBadgeStyle}" Background="{StaticResource PillBlue}" Margin="0,0,8,6">
+                                <TextBlock Text="iPhone HEIC / HEIF" FontSize="12" FontWeight="Bold" Foreground="{StaticResource TextPrimary}"/>
                             </Border>
-                            <Border Background="#FFFFFF" BorderBrush="{StaticResource BorderColor}" BorderThickness="1" CornerRadius="4" Padding="8,3" Margin="0,0,6,0">
-                                <TextBlock Text="Android WebP" FontSize="11" FontWeight="SemiBold" Foreground="{StaticResource AccentPrimary}"/>
+                            <Border Style="{StaticResource PillBadgeStyle}" Background="{StaticResource PillMint}" Margin="0,0,8,6">
+                                <TextBlock Text="Android WebP" FontSize="12" FontWeight="Bold" Foreground="{StaticResource TextPrimary}"/>
                             </Border>
-                            <Border Background="#FFFFFF" BorderBrush="{StaticResource BorderColor}" BorderThickness="1" CornerRadius="4" Padding="8,3" Margin="0,0,6,0">
-                                <TextBlock Text="JPG / JPEG" FontSize="11" FontWeight="SemiBold" Foreground="{StaticResource TextSecondary}"/>
+                            <Border Style="{StaticResource PillBadgeStyle}" Background="{StaticResource PillGold}" Margin="0,0,8,6">
+                                <TextBlock Text="JPG / JPEG" FontSize="12" FontWeight="Bold" Foreground="{StaticResource TextPrimary}"/>
                             </Border>
-                            <Border Background="#FFFFFF" BorderBrush="{StaticResource BorderColor}" BorderThickness="1" CornerRadius="4" Padding="8,3">
-                                <TextBlock Text="PNG / BMP / TIFF" FontSize="11" FontWeight="SemiBold" Foreground="{StaticResource TextSecondary}"/>
+                            <Border Style="{StaticResource PillBadgeStyle}" Background="{StaticResource PillLilac}" Margin="0,0,0,6">
+                                <TextBlock Text="PNG / BMP / TIFF" FontSize="12" FontWeight="Bold" Foreground="{StaticResource TextPrimary}"/>
                             </Border>
-                        </StackPanel>
+                        </WrapPanel>
                     </StackPanel>
-                </Border>
+                </Grid>
 
-                <!-- 任務清單 DataGrid/ListView -->
-                <ListView ItemsSource="{Binding Tasks}" Background="Transparent" BorderThickness="0"
+                <!-- 任務清單 -->
+                <ListView ItemsSource="{Binding Tasks}" Background="Transparent" BorderThickness="0" AlternationCount="2"
                           ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+                          ItemContainerStyle="{StaticResource GameListItemStyle}"
                           Foreground="{StaticResource TextPrimary}">
-                    <ListView.ItemContainerStyle>
-                        <Style TargetType="ListViewItem">
-                            <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
-                            <Setter Property="Background" Value="Transparent"/>
-                            <Setter Property="BorderBrush" Value="{StaticResource BorderColorLight}"/>
-                            <Setter Property="BorderThickness" Value="0,0,0,1"/>
-                            <Setter Property="Padding" Value="8,8"/>
-                        </Style>
-                    </ListView.ItemContainerStyle>
                     <ListView.ItemTemplate>
                         <DataTemplate DataType="{x:Type models:ImageTaskItem}">
                             <Grid>
                                 <Grid.ColumnDefinitions>
                                     <ColumnDefinition Width="2*"/>
                                     <ColumnDefinition Width="80"/>
-                                    <ColumnDefinition Width="90"/>
-                                    <ColumnDefinition Width="150"/>
-                                    <ColumnDefinition Width="150"/>
+                                    <ColumnDefinition Width="80"/>
+                                    <ColumnDefinition Width="160"/>
+                                    <ColumnDefinition Width="110"/>
                                     <ColumnDefinition Width="40"/>
                                 </Grid.ColumnDefinitions>
 
                                 <!-- 檔名與路徑 -->
                                 <StackPanel Grid.Column="0" VerticalAlignment="Center" Margin="0,0,10,0">
-                                    <TextBlock Text="{Binding FileName}" FontWeight="SemiBold" Foreground="{StaticResource TextPrimary}" TextTrimming="CharacterEllipsis"/>
-                                    <TextBlock Text="{Binding FilePath}" FontSize="11" Foreground="{StaticResource TextSecondary}" TextTrimming="CharacterEllipsis"/>
+                                    <TextBlock Text="{Binding FileName}" FontSize="13" FontWeight="Bold" Foreground="{StaticResource TextPrimary}" TextTrimming="CharacterEllipsis"/>
+                                    <TextBlock Text="{Binding FilePath}" FontSize="11" Foreground="{StaticResource TextSecondary}" TextTrimming="CharacterEllipsis" ToolTip="{Binding FilePath}"/>
                                 </StackPanel>
 
                                 <!-- 格式與大小 -->
-                                <Border Grid.Column="1" Background="#E2E8F0" CornerRadius="4" Padding="6,2" HorizontalAlignment="Center" VerticalAlignment="Center">
+                                <Border Grid.Column="1" Style="{StaticResource PillBadgeStyle}" HorizontalAlignment="Center">
                                     <TextBlock Text="{Binding SourceFormat}" FontWeight="Bold" FontSize="11" Foreground="{StaticResource AccentPrimary}"/>
                                 </Border>
 
                                 <TextBlock Grid.Column="2" Text="{Binding SourceSizeFormatted}" VerticalAlignment="Center" HorizontalAlignment="Right"
-                                           Foreground="{StaticResource TextSecondary}" Margin="0,0,10,0" FontSize="11"/>
+                                           Foreground="{StaticResource TextSecondary}" Margin="0,0,10,0" FontSize="12" FontFamily="{StaticResource NumberFont}"/>
 
                                 <!-- 進度與狀態 -->
                                 <StackPanel Grid.Column="3" VerticalAlignment="Center" Margin="0,0,10,0">
-                                    <ProgressBar Value="{Binding Progress}" Maximum="100" Height="6" Margin="0,0,0,4"/>
-                                    <TextBlock Text="{Binding StatusMessage}" FontSize="11" Foreground="{StaticResource TextSecondary}"/>
+                                    <ProgressBar Value="{Binding Progress}" Maximum="100" Height="12" Margin="0,0,0,3"/>
+                                    <TextBlock x:Name="StatusText" Text="{Binding StatusMessage}" FontSize="11" FontWeight="SemiBold"
+                                               Foreground="{StaticResource TextSecondary}" TextTrimming="CharacterEllipsis" ToolTip="{Binding StatusMessage}"/>
                                 </StackPanel>
 
                                 <!-- 輸出大小與耗時 -->
                                 <StackPanel Grid.Column="4" VerticalAlignment="Center" Margin="0,0,10,0">
-                                    <TextBlock Text="{Binding OutputSizeFormatted}" FontSize="11" FontWeight="SemiBold" Foreground="{StaticResource TextPrimary}"/>
-                                    <TextBlock Text="{Binding Elapsed, StringFormat={}{0:mm\\:ss\\.ff}}" FontSize="10" Foreground="{StaticResource TextSecondary}"/>
+                                    <TextBlock Text="{Binding OutputSizeFormatted}" FontSize="12" FontWeight="Bold" Foreground="{StaticResource TextPrimary}" FontFamily="{StaticResource NumberFont}"/>
+                                    <TextBlock Text="{Binding Elapsed, StringFormat={}{0:mm\\:ss\\.ff}}" FontSize="11" Foreground="{StaticResource TextSecondary}" FontFamily="{StaticResource NumberFont}"/>
                                 </StackPanel>
 
                                 <!-- 刪除項目按鈕 -->
                                 <Button Grid.Column="5" Content="✕"
                                         Command="{Binding DataContext.RemoveSelectedCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
                                         CommandParameter="{Binding}"
-                                        Style="{StaticResource SecondaryButtonStyle}"
-                                        Height="26" Padding="6,0" FontSize="11" VerticalAlignment="Center"/>
+                                        Style="{StaticResource SecondaryButtonStyle}" ToolTip="從清單移除（不刪除檔案）"
+                                        Width="34" Height="30" Padding="0" FontSize="12" VerticalAlignment="Center"/>
                             </Grid>
+                            <DataTemplate.Triggers>
+                                <DataTrigger Binding="{Binding Status}" Value="Success">
+                                    <Setter TargetName="StatusText" Property="Foreground" Value="{StaticResource AccentSuccess}"/>
+                                </DataTrigger>
+                                <DataTrigger Binding="{Binding Status}" Value="Failed">
+                                    <Setter TargetName="StatusText" Property="Foreground" Value="{StaticResource AccentDangerHover}"/>
+                                </DataTrigger>
+                            </DataTemplate.Triggers>
                         </DataTemplate>
                     </ListView.ItemTemplate>
                 </ListView>
             </Grid>
         </Border>
 
-        <!-- 下方轉檔參數設定區 (整合工具列) -->
-        <Border Grid.Row="2" Style="{StaticResource CardBorderStyle}" Margin="0,0,0,12" Padding="14,10">
+        <!-- 下方轉檔參數設定區 -->
+        <Border Grid.Row="2" Style="{StaticResource CardBorderStyle}" Margin="0,0,0,10" Padding="14,8">
+            <WrapPanel VerticalAlignment="Center">
+                <!-- 格式選擇 -->
+                <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Margin="0,3,20,3">
+                    <TextBlock Text="目標格式：" Style="{StaticResource FormLabelTextStyle}" VerticalAlignment="Center" Margin="0,0,8,0"/>
+                    <ComboBox ItemsSource="{Binding AvailableFormats}" SelectedItem="{Binding TargetFormat}" Width="96"/>
+                </StackPanel>
+
+                <!-- 品質設定 (JPG時有效) -->
+                <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Margin="0,3,20,3">
+                    <TextBlock Text="品質 (JPG)：" Style="{StaticResource FormLabelTextStyle}" VerticalAlignment="Center" Margin="0,0,8,0"/>
+                    <Slider Value="{Binding JpgQuality}" Minimum="10" Maximum="100" Width="110" VerticalAlignment="Center"
+                            IsSnapToTickEnabled="True" TickFrequency="1" SmallChange="1" LargeChange="10"/>
+                    <TextBlock Text="{Binding JpgQuality, StringFormat={}{0}%}" Foreground="{StaticResource TextPrimary}" FontWeight="Bold" FontFamily="{StaticResource NumberFont}"
+                               Width="40" TextAlignment="Right" VerticalAlignment="Center" Margin="4,0,0,0" FontSize="13"/>
+                </StackPanel>
+
+                <!-- Exif 旋轉校正 -->
+                <CheckBox IsChecked="{Binding AutoOrient}" Content="自動校正手機拍攝方向 (Exif)" VerticalAlignment="Center" Margin="0,3,20,3"/>
+
+                <!-- 輸出位置管理 -->
+                <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Margin="0,3,0,3">
+                    <Button Content="📍 變更輸出路徑" Command="{Binding BrowseOutputDirectoryCommand}" Style="{StaticResource SecondaryButtonStyle}" Margin="0,0,8,0"
+                            ToolTip="{Binding OutputDirectoryHint}"/>
+                    <Button Content="📂 開啟輸出資料夾" Command="{Binding OpenOutputDirectoryCommand}" Style="{StaticResource SecondaryButtonStyle}"
+                            ToolTip="至少完成一筆轉檔後即可開啟"/>
+                </StackPanel>
+            </WrapPanel>
+        </Border>
+
+        <!-- 底部進度與執行按鈕 -->
+        <Border Grid.Row="3" Style="{StaticResource CardBorderStyle}" Padding="14,8">
             <Grid>
                 <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="Auto"/>
-                    <ColumnDefinition Width="Auto"/>
                     <ColumnDefinition Width="*"/>
                     <ColumnDefinition Width="Auto"/>
                 </Grid.ColumnDefinitions>
 
-                <!-- 格式選擇 -->
-                <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center" Margin="0,0,20,0">
-                    <TextBlock Text="目標格式：" Style="{StaticResource FormLabelTextStyle}" VerticalAlignment="Center" Margin="0,0,8,0"/>
-                    <ComboBox ItemsSource="{Binding AvailableFormats}" SelectedItem="{Binding TargetFormat}" Width="90" Height="30" VerticalContentAlignment="Center"/>
+                <!-- 總體進度 -->
+                <StackPanel Grid.Column="0" VerticalAlignment="Center" Margin="0,0,16,0">
+                    <ProgressBar Value="{Binding OverallProgress}" Maximum="100" Height="18" Margin="0,0,0,4"/>
+                    <TextBlock Text="{Binding OutputDirectoryHint}" Style="{StaticResource HelperTextStyle}" TextTrimming="CharacterEllipsis"/>
                 </StackPanel>
 
-                <!-- 品質設定 (JPG時有效) -->
-                <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center" Margin="0,0,20,0">
-                    <TextBlock Text="品質 (JPG)：" Style="{StaticResource FormLabelTextStyle}" VerticalAlignment="Center" Margin="0,0,8,0"/>
-                    <Slider Value="{Binding JpgQuality}" Minimum="10" Maximum="100" Width="100" VerticalAlignment="Center"/>
-                    <TextBlock Text="{Binding JpgQuality, StringFormat={}{0}%}" Foreground="{StaticResource TextSecondary}" Width="35" TextAlignment="Right" VerticalAlignment="Center" Margin="4,0,0,0" FontSize="12"/>
-                </StackPanel>
-
-                <!-- Exif 旋轉校正 -->
-                <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">
-                    <CheckBox IsChecked="{Binding AutoOrient}" Content="自動校正手機拍攝方向 (Exif Auto-Orient)"
-                              Foreground="{StaticResource TextPrimary}" VerticalAlignment="Center" Margin="0,0,16,0" FontSize="12"/>
-                </StackPanel>
-
-                <!-- 輸出位置管理 -->
-                <StackPanel Grid.Column="3" Orientation="Horizontal" VerticalAlignment="Center">
-                    <Button Content="📍 變更輸出路徑" Command="{Binding BrowseOutputDirectoryCommand}" Style="{StaticResource SecondaryButtonStyle}" Margin="0,0,8,0"/>
-                    <Button Content="📂 開啟輸出資料夾" Command="{Binding OpenOutputDirectoryCommand}" Style="{StaticResource SecondaryButtonStyle}"
-                            ToolTip="至少完成一筆轉檔後即可開啟"/>
+                <!-- 啟動 / 取消按鈕 -->
+                <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
+                    <Button Content="⏹ 取消" Command="{Binding CancelConvertCommand}" Style="{StaticResource DangerButtonStyle}"
+                            Visibility="{Binding IsProcessing, Converter={StaticResource BoolToVisConverter}}" Margin="0,0,8,0" Height="42"/>
+                    <Button Content="⚡ 開始批次轉檔" Command="{Binding StartConvertCommand}" Style="{StaticResource SuccessButtonStyle}"
+                            Padding="22,0" Height="42" FontSize="15"/>
                 </StackPanel>
             </Grid>
         </Border>
-
-        <!-- 底部進度與執行按鈕 -->
-        <Grid Grid.Row="3">
-            <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="*"/>
-                <ColumnDefinition Width="Auto"/>
-            </Grid.ColumnDefinitions>
-
-            <!-- 總體進度 -->
-            <StackPanel Grid.Column="0" VerticalAlignment="Center" Margin="0,0,16,0">
-                <ProgressBar Value="{Binding OverallProgress}" Maximum="100" Height="8" Margin="0,0,0,4"/>
-                <TextBlock Text="{Binding SummaryText}" FontSize="12" Foreground="{StaticResource TextSecondary}"/>
-            </StackPanel>
-
-            <!-- 啟動 / 取消按鈕 -->
-            <StackPanel Grid.Column="1" Orientation="Horizontal">
-                <Button Content="⏹ 取消" Command="{Binding CancelConvertCommand}" Style="{StaticResource SecondaryButtonStyle}"
-                        Visibility="{Binding IsProcessing, Converter={StaticResource BoolToVisConverter}}" Margin="0,0,8,0"/>
-                <Button Content="⚡ 開始高速批次轉檔" Command="{Binding StartConvertCommand}" Style="{StaticResource SuccessButtonStyle}"
-                        Padding="20,0" Height="36" FontSize="14"/>
-            </StackPanel>
-        </Grid>
     </Grid>
 </UserControl>

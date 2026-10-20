@@ -6,10 +6,6 @@ using System.Windows.Media.Imaging;
 
 var tests = new (string Name, Action Execute)[]
 {
-    ("長截圖依比例與重疊計算分頁", LongScreenshot_CalculatesExpectedPages),
-    ("長截圖空白尺寸不產生分頁", LongScreenshot_ReturnsEmptyForEmptySource),
-    ("長截圖拒絕無效圖框設定", LongScreenshot_RejectsInvalidOptions),
-    ("長截圖匯出使用連續流水號", LongScreenshot_ExportsSequentialNames),
     ("影片截圖建立獨立資料夾並使用流水號", VideoSnapshot_UsesFolderAndSequentialNames),
     ("輸出索引保留最小追溯資訊並可移除已刪除檔案", OutputIndex_WritesAndRemovesEntries),
     ("圖片轉檔不覆寫來源 PNG 或 JPG", ImageConversion_CreatesNewFilesWithoutChangingSources),
@@ -33,64 +29,6 @@ foreach (var test in tests)
 
 Console.WriteLine($"完成：{tests.Length - failed}/{tests.Length} 項測試通過。");
 return failed == 0 ? 0 : 1;
-
-static void LongScreenshot_CalculatesExpectedPages()
-{
-    var service = new LongScreenshotService();
-    var options = new LongScreenshotSplitOptions(8, 17.5, 5, "unused", "");
-    var pages = service.CalculatePages(800, 3500, options);
-
-    AssertEqual(3, pages.Count, "頁數");
-    AssertPage(pages[0], 1, 0, 1750, 0, 50);
-    AssertPage(pages[1], 2, 1700, 1750, 50, 50);
-    AssertPage(pages[2], 3, 3400, 100, 50, 0);
-}
-
-static void LongScreenshot_ReturnsEmptyForEmptySource()
-{
-    var service = new LongScreenshotService();
-    var options = new LongScreenshotSplitOptions(8, 17.5, 5, "unused", "");
-
-    AssertEqual(0, service.CalculatePages(0, 500, options).Count, "寬度為零");
-    AssertEqual(0, service.CalculatePages(500, 0, options).Count, "高度為零");
-}
-
-static void LongScreenshot_RejectsInvalidOptions()
-{
-    var service = new LongScreenshotService();
-    AssertThrows<ArgumentOutOfRangeException>(() =>
-        service.CalculatePages(500, 1000, new LongScreenshotSplitOptions(0, 17.5, 5, "unused", "")));
-    AssertThrows<ArgumentOutOfRangeException>(() =>
-        service.CalculatePages(500, 1000, new LongScreenshotSplitOptions(8, 17.5, -1, "unused", "")));
-}
-
-static void LongScreenshot_ExportsSequentialNames()
-{
-    string directory = Path.Combine(Path.GetTempPath(), $"PoliceImageToolkit-{Guid.NewGuid():N}");
-    try
-    {
-        var service = new LongScreenshotService();
-        var options = new LongScreenshotSplitOptions(8, 17.5, 5, directory, "");
-        var source = CreateTestBitmap(8, 40);
-        var pages = new[]
-        {
-            new LongScreenshotPage(1, 0, 20, 0, 0),
-            new LongScreenshotPage(2, 20, 20, 0, 0)
-        };
-
-        var firstRun = service.ExportPagesAsync(source, pages, "source.png", options).GetAwaiter().GetResult();
-        var secondRun = service.ExportPagesAsync(source, pages, "source.png", options).GetAwaiter().GetResult();
-
-        AssertEqual("001.png", Path.GetFileName(firstRun[0]), "長截圖第 1 頁檔名");
-        AssertEqual("002.png", Path.GetFileName(firstRun[1]), "長截圖第 2 頁檔名");
-        AssertEqual("003.png", Path.GetFileName(secondRun[0]), "長截圖再次匯出起始檔名");
-        AssertEqual("004.png", Path.GetFileName(secondRun[1]), "長截圖再次匯出後續檔名");
-    }
-    finally
-    {
-        if (Directory.Exists(directory)) Directory.Delete(directory, true);
-    }
-}
 
 static void VideoSnapshot_UsesFolderAndSequentialNames()
 {
@@ -217,15 +155,6 @@ static void UpdateService_ComparesSemanticVersions()
     AssertTrue(UpdateService.CompareVersions("v11.1.9", "v11.2.0") < 0, "舊版應小於新版");
 }
 
-static void AssertPage(PoliceImageToolkit.Models.LongScreenshotPage page, int number, int sourceY, int height, int overlapTop, int overlapBottom)
-{
-    AssertEqual(number, page.PageNumber, "頁碼");
-    AssertEqual(sourceY, page.SourceY, "起始 Y");
-    AssertEqual(height, page.PixelHeight, "頁高");
-    AssertEqual(overlapTop, page.OverlapTopPixels, "上方重疊");
-    AssertEqual(overlapBottom, page.OverlapBottomPixels, "下方重疊");
-}
-
 static void AssertEqual<T>(T expected, T actual, string name) where T : IEquatable<T>
 {
     if (!EqualityComparer<T>.Default.Equals(expected, actual))
@@ -237,18 +166,4 @@ static void AssertEqual<T>(T expected, T actual, string name) where T : IEquatab
 static void AssertTrue(bool condition, string message)
 {
     if (!condition) throw new InvalidOperationException(message);
-}
-
-static void AssertThrows<TException>(Action action) where TException : Exception
-{
-    try
-    {
-        action();
-    }
-    catch (TException)
-    {
-        return;
-    }
-
-    throw new InvalidOperationException($"預期應拋出 {typeof(TException).Name}。");
 }

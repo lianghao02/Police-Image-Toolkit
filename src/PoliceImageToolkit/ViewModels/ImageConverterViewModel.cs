@@ -73,14 +73,24 @@ public class ImageConverterViewModel : ViewModelBase
     public string OutputDirectory
     {
         get => _outputDirectory;
-        set => SetProperty(ref _outputDirectory, value);
+        set
+        {
+            if (SetProperty(ref _outputDirectory, value)) OnPropertyChanged(nameof(OutputDirectoryHint));
+        }
     }
 
     public bool UseCustomOutputDirectory
     {
         get => _useCustomOutputDirectory;
-        set => SetProperty(ref _useCustomOutputDirectory, value);
+        set
+        {
+            if (SetProperty(ref _useCustomOutputDirectory, value)) OnPropertyChanged(nameof(OutputDirectoryHint));
+        }
     }
+
+    public string OutputDirectoryHint => UseCustomOutputDirectory && !string.IsNullOrWhiteSpace(OutputDirectory)
+        ? $"輸出位置：{OutputDirectory}"
+        : "輸出位置：各來源圖片所在資料夾下的 Converted 子資料夾（不覆寫原檔）";
 
     public bool IsProcessing
     {
@@ -180,11 +190,26 @@ public class ImageConverterViewModel : ViewModelBase
     {
         if (Tasks.Count == 0 || IsProcessing) return;
 
+        // 已成功轉檔的項目不重複處理，避免再次按下時產生 _1、_2 重複檔與重複索引。
+        var pendingTasks = Tasks.Where(t => t.Status != TaskStatus.Success).ToList();
+        if (pendingTasks.Count == 0)
+        {
+            SummaryText = "清單中的圖片皆已轉檔完成；如需重新轉檔，請清空清單後重新加入。";
+            return;
+        }
+
+        foreach (var task in pendingTasks)
+        {
+            task.Status = TaskStatus.Pending;
+            task.StatusMessage = "等待中";
+            task.Progress = 0;
+        }
+
         IsProcessing = true;
         _cts = new CancellationTokenSource();
         var ct = _cts.Token;
 
-        int total = Tasks.Count;
+        int total = pendingTasks.Count;
         int completed = 0;
         OverallProgress = 0;
         SummaryText = $"正在批次轉檔中 (0 / {total})...";
@@ -199,7 +224,7 @@ public class ImageConverterViewModel : ViewModelBase
                 CancellationToken = ct
             };
 
-            await Parallel.ForEachAsync(Tasks, parallelOptions, async (task, token) =>
+            await Parallel.ForEachAsync(pendingTasks, parallelOptions, async (task, token) =>
             {
                 string targetDir = UseCustomOutputDirectory && !string.IsNullOrWhiteSpace(OutputDirectory)
                     ? OutputDirectory
@@ -226,8 +251,8 @@ public class ImageConverterViewModel : ViewModelBase
             });
 
             sw.Stop();
-            int successCount = Tasks.Count(t => t.Status == TaskStatus.Success);
-            string indexStatus = await UpdateOutputIndexesAsync();
+            int successCount = pendingTasks.Count(t => t.Status == TaskStatus.Success);
+            string indexStatus = await UpdateOutputIndexesAsync(pendingTasks);
             SummaryText = $"轉檔完成！成功: {successCount} 筆，失敗: {total - successCount} 筆 (總耗時: {sw.Elapsed.TotalSeconds:0.##} 秒){indexStatus}";
         }
         catch (OperationCanceledException)
@@ -252,9 +277,9 @@ public class ImageConverterViewModel : ViewModelBase
         _cts?.Cancel();
     }
 
-    private async Task<string> UpdateOutputIndexesAsync()
+    private async Task<string> UpdateOutputIndexesAsync(IEnumerable<ImageTaskItem> processedTasks)
     {
-        var groups = Tasks
+        var groups = processedTasks
             .Where(task => task.Status == TaskStatus.Success && !string.IsNullOrWhiteSpace(task.OutputPath))
             .GroupBy(task => Path.GetDirectoryName(task.OutputPath)!)
             .ToList();

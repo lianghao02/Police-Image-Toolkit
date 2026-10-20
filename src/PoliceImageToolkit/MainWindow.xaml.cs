@@ -17,8 +17,8 @@ public partial class MainWindow : Window
 
     private void MainWindow_PreviewKeyDown(object sender, KeyEventArgs e)
     {
-        // 若當前焦點在 TextBox，允許正常文字輸入，不攔截按鍵
-        if (Keyboard.FocusedElement is TextBox)
+        // 焦點在文字輸入或下拉選單時保留原生按鍵行為（避免方向鍵改選項時同時拖動影片）
+        if (Keyboard.FocusedElement is TextBox or ComboBox or ComboBoxItem)
         {
             return;
         }
@@ -96,31 +96,19 @@ public partial class MainWindow : Window
 
     private void TabImage_Checked(object sender, RoutedEventArgs e)
     {
-        if (ViewImageConverter != null && ViewVideoSnapshot != null && ViewLongScreenshotSplit != null)
+        if (ViewImageConverter != null && ViewVideoSnapshot != null)
         {
             ViewImageConverter.Visibility = Visibility.Visible;
             ViewVideoSnapshot.Visibility = Visibility.Collapsed;
-            ViewLongScreenshotSplit.Visibility = Visibility.Collapsed;
         }
     }
 
     private void TabVideo_Checked(object sender, RoutedEventArgs e)
     {
-        if (ViewImageConverter != null && ViewVideoSnapshot != null && ViewLongScreenshotSplit != null)
+        if (ViewImageConverter != null && ViewVideoSnapshot != null)
         {
             ViewImageConverter.Visibility = Visibility.Collapsed;
             ViewVideoSnapshot.Visibility = Visibility.Visible;
-            ViewLongScreenshotSplit.Visibility = Visibility.Collapsed;
-        }
-    }
-
-    private void TabLongScreenshot_Checked(object sender, RoutedEventArgs e)
-    {
-        if (ViewImageConverter != null && ViewVideoSnapshot != null && ViewLongScreenshotSplit != null)
-        {
-            ViewImageConverter.Visibility = Visibility.Collapsed;
-            ViewVideoSnapshot.Visibility = Visibility.Collapsed;
-            ViewLongScreenshotSplit.Visibility = Visibility.Visible;
         }
     }
 }

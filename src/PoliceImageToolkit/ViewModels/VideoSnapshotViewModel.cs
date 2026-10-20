@@ -58,6 +58,7 @@ public class VideoSnapshotViewModel : ViewModelBase
 
     public ObservableCollection<SnapshotResult> Snapshots { get; }
 
+    public event Action<string>? RequestLoadVideo;
     public event Action? RequestPlay;
     public event Action? RequestPause;
     public event Action<TimeSpan>? RequestSeek;
@@ -217,17 +218,35 @@ public class VideoSnapshotViewModel : ViewModelBase
     {
         if (!File.Exists(path)) return;
 
+        if (IsPlaying) RequestPause?.Invoke();
+        IsPlaying = false;
         VideoPath = path;
         VideoTitle = Path.GetFileName(path);
+        Duration = TimeSpan.Zero;
+        CurrentPosition = TimeSpan.Zero;
+        // 換片後清除上一部影片的對照圖，避免以他片末行判斷是否漏截；已擷取清單保留。
+        LastCapturedSnapshot = null;
         HasVideoLoaded = true;
-        StatusMessage = $"已載入影片：{VideoTitle} (按空白鍵 Space 秒截，←/→ 鍵微調)";
+        StatusMessage = $"已載入影片：{VideoTitle} (按空白鍵 Space 擷取，←/→ 鍵微調)";
+
+        // 由 View 實際指定播放器來源；按鈕開檔與拖曳開檔共用同一路徑。
+        RequestLoadVideo?.Invoke(path);
+    }
+
+    public void MarkVideoLoadFailed(string reason)
+    {
+        HasVideoLoaded = false;
+        IsPlaying = false;
+        Duration = TimeSpan.Zero;
+        CurrentPosition = TimeSpan.Zero;
+        StatusMessage = $"無法播放影片 {VideoTitle}：{reason}（可先以其他播放器確認格式，或轉為 MP4 H.264 後再載入）";
     }
 
     private void ExecuteOpenVideo()
     {
         var dialog = new OpenFileDialog
         {
-            Filter = "手機影片 (*.mov;*.mp4;*.m4v;*.avi;*.mkv)|*.mov;*.mp4;*.m4v;*.avi;*.mkv|所有檔案 (*.*)|*.*",
+            Filter = "手機影片 (*.mov;*.mp4;*.m4v;*.avi;*.mkv;*.webm)|*.mov;*.mp4;*.m4v;*.avi;*.mkv;*.webm|所有檔案 (*.*)|*.*",
             Title = "選擇手機影片 (支援 iPhone MOV / Android MP4)"
         };
 
@@ -248,6 +267,12 @@ public class VideoSnapshotViewModel : ViewModelBase
         }
         else
         {
+            // 已播放至片尾時從頭播放，否則按下播放不會有任何反應。
+            if (Duration > TimeSpan.Zero && CurrentPosition >= Duration - TimeSpan.FromMilliseconds(100))
+            {
+                RequestSeek?.Invoke(TimeSpan.Zero);
+            }
+
             RequestPlay?.Invoke();
             IsPlaying = true;
         }
@@ -347,6 +372,8 @@ public class VideoSnapshotViewModel : ViewModelBase
         finally
         {
             _isCapturing = false;
+            // 擷取完成後立即重新評估按鈕狀態，否則截圖鈕會維持停用外觀直到下一次滑鼠或鍵盤輸入。
+            CommandManager.InvalidateRequerySuggested();
         }
     }
 

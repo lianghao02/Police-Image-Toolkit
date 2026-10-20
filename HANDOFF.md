@@ -3,81 +3,84 @@
 ## 核心元資料 (Metadata)
 - **Repository**：lianghao02/Police-Image-Toolkit
 - **Branch**：main
-- **Commit SHA**：4dc0ee92845716ee58f9e2eff30d508a8d563f6f（本輪提交前基準；最新提交以 Git 記錄為準）
+- **Commit SHA**：561b5a314ffc49d2eff0101e18a7785f95460c29（本輪未提交）
 - **Skill Version**：v1.0.0
-- **Task Type**：HANDOFF
+- **Task Type**：IMPROVE
 - **Local Path Hint**：03_Police-Image-Toolkit
-
-## 目前狀態
-README 內容更新完成；本輪僅處理文件，產品與發布驗證沿用既有證據。
-
-## 本輪目標
-補齊概念、開發原因、典型使用流程、已知 Bug／限制與問題回報方式，保留現有功能。
-
-## 基準與已確認事實 (Baseline & Confirmed Facts)
-先讀現行 README 與專案規則／來源，再增補文件；Git 與原文基準保存在中央 artifacts/readme-refresh-baseline。
-
-## 已完成 (Completed)
-2026-10-06 GitHub 同步交接：使用者已授權提交與推送前輪成果；本輪只提交已核對範圍。最新 Commit SHA、遠端同步與 CI 結果統一見控制中心 `docs/github-sync/RESULTS.md`，不將提交本身的 SHA 寫入同一份提交。
-
-已更新 README，區分已修復歷史、功能限制與待驗證事項，不憑空新增已確認 Bug。
-
-## 異動檔案 (Changed Files)
-README.md、HANDOFF.md。
-
-## 刻意未修改 (Do Not Do / Deliberately Omitted)
-產品程式、設定、環境、有效測試及使用者資料均未修改；未 Commit／Push。
-
-## 尚未完成 (Remaining Work)
-- **P1 (阻斷/必須)**：無本輪文件阻斷。
-- **P2 (重要/當次)**：文件驗證結果由中央 docs/readme-refresh/RESULTS.md 彙整。
-- **P3 (改善建議/暫緩)**：產品功能與不同電腦的實測屬另一個任務，不以文件更新宣稱通過。
-
-## 驗證結果 (Validation)
-### 已執行測試與結果
-本次只檢查文件結構、相對連結、差異與 Git／既有修改保護；結果見中央報告。
-### 尚未驗證項目
-本輪未重新執行產品單元測試、GUI、遠端服務或發布驗證。
-### 已知風險 (Known Risks)
-README 依現行來源與既有驗收整理，舊發布包不會自動包含原始碼修正。
-
-## Git 狀態
-- Commit：上述 SHA 為提交前基準；最新 SHA 見 `git log -1` 與中央同步報告。
-- Push：實際推送及遠端核對結果見中央 `docs/github-sync/RESULTS.md`。
-- Working Tree：最終狀態見中央同步報告；不含被忽略的環境、成品與使用者資料。
-- Branch：main。
-
-## 下一步建議動作 (Next Recommended Action)
-文件檢查完成後停止擴大修改；有實際問題再以可重現資料另案處理。
-
-## 發布狀態 (Release Status)
-本輪未建立或發布新版本。
 
 ---
 
-## 承接前輪（歷史原文保留）
+## 目前狀態
+可交付（未提交、未發布）
 
-> 2026-10-05 環境修復交接：本輪僅修正 AGENTS.md 的共用 Skill 正式來源為 configs/skills，程式碼與既有環境不變。Working Tree 為 Modified，未 Commit／Push；下列發布與功能紀錄為承接的前輪成果。
+## 本輪目標
+1. 依使用者要求將 WPF 介面全面改為 2D 遊戲 Q 版風格，並確保字體、框線、清單與底色的對比。
+2. 自行檢查功能與 Bug 並修正。
+3. 依使用者回饋（實際操作不便）移除「長截圖分頁輔助」整個功能。
 
-# 當前交接狀態 (Current Handoff)
+## 基準與已確認事實 (Baseline & Confirmed Facts)
+- 開始時 HEAD 為 `561b5a3`，Working Tree Clean，版本 v11.4.0。
+- 遊戲風格採「2D 遊戲 Q 版」（使用者指定，不另做選型）；只改視覺元件，不加入等級、經驗值等遊戲機制，功能名稱不變。
+- 長截圖功能移除是使用者明確決定，`AGENTS.md` 已記錄「勿再加回」。
 
-- **本輪目標**：針對警政鑑識公務人員使用情境，將全系統 UI/UX 全面重構升級為「現代專業柔和淺色調（Light Morandi / 莫蘭迪冷灰與霧藍）」，徹底解決 WPF 文字發虛問題，建立一致元件尺寸標準，並深化商業級視覺與操作 UX。
-- **已完成**：
-  - **字型清晰度與底層渲染重構**：在 `App.xaml` 與 `MainWindow.xaml` 頂層及全域 TextBlock 注入 `TextFormattingMode="Display"` 與 `TextRenderingMode="ClearType"`，並啟用 `UseLayoutRounding="True"` 與 `SnapsToDevicePixels="True"`，徹底根治 Windows/WPF 中文字筆畫模糊發虛問題。
-  - **現代莫蘭迪淺色 Design Tokens**：全域定義冷灰底色（`#F1F4F8` / `#E5EBF2`）、純白卡片（`#FFFFFF`）、深板岩文字（`#1E293B` / `#64748B`）、霧藍主色（`#3E5E7A`）、鼠尾草綠成功色（`#347555`）與赭紅警告色（`#B94A4A`），營造專業、克制且長時間辦案不眩光的視覺體驗。
-  - **表單與按鈕規格標準化**：輸入框高度統一為 32px、圓角 5px、水平邊距 8px、垂直置中，具備 Focus 微厚邊框提示；按鈕高度統一為 32px（緊湊操作 24~26px），支援 Hover 柔和色過渡與點擊手感位移；頂部導航分頁升級為 Segmented Control 膠囊底槽與白底浮動選中卡片。
-  - **三大功能工作台 UX 深化**：
-    - **手機圖片批次轉檔**：空狀態升級為大面積淺灰虛線拖曳熱區，展示四大手機照片格式膠囊 Badge（HEIC、WebP、JPG、PNG/BMP）；轉檔清單採交錯灰底與成功進度狀態。
-    - **手機影片逐格截圖**：打造擬真深色手機外框與柔和待機提示；影片播放控制列與快捷鍵整合；快照與已審核證物清單左右等高對齊。
-    - **手機長截圖分頁輔助**：擬真手機捲動外框；報告書圖框規格集中化並提供公務標準提示（8 × 17.5 cm / 重疊 5 mm）；分頁清單改為卡片式徽章與明確流水號標記。
-  - **工程驗證與發布**：核心單元測試 `scripts/test.ps1` 8/8 PASS；QA 完整檢驗 `scripts/qa.ps1` PASS（Git diff 行尾無贅餘空格、無機敏資訊洩漏、Release 建置 0 警告 0 錯誤）；單檔發布 `scripts/build.ps1` 產出 `dist/PoliceImageToolkit.exe`（68.62 MB），通過本機獨立進程 Smoke Test 啟動測試。
-- **刻意未修改（保留範圍）**：核心轉檔管線（SkiaSharp / Magick.NET）、影片逐格解碼演算法、長截圖切分幾何演算法、`report_index.json` 追溯結構。
-- **驗證結果與測試證據**：
-  - `scripts/test.ps1`：8/8 項測試全數通過。
-  - `scripts/qa.ps1`：Git diff format check passed, sensitive scan clear, C# build 0 warning / 0 error.
-  - Smoke Test：`dist/PoliceImageToolkit.exe` 啟動 3 秒輪詢正常，可正常運作並安全退出。
-- **Git 狀態**：
-  - Commit：`fa23a00` (`design: 全面升級現代專業柔和淺色調莫蘭迪介面與清晰度`)
-  - Branch：`main` (ahead of 'origin/main' by 1 commit)
-  - Working Tree：Clean (HANDOFF.md 即將提交)
-- **目前狀態判定**：可交付 (Deliverable)
+## 已完成 (Completed)
+- **Q 版主題**（`App.xaml` 集中管理，沿用舊資源鍵名）：
+  - 奶油圓點底、警務藍標題列、金色厚底分頁籤、深墨狀態列。
+  - 粗墨框貼紙卡片與金色標題徽章。
+  - 厚底按鍵樣式（藍／綠／紅／奶油／金）。
+  - TextBox、ComboBox、CheckBox、Slider、ProgressBar、ScrollBar、ToolTip 全面改寫範本。
+  - 清單改為斑馬紋圓角格子。
+- **對比驗算（WCAG）**：主要文字 13.9:1、次要 7.5:1、輔助 5.8:1、白字按鈕 ≥ 4.8:1、墨字金底 9.2:1。
+- **Bug 修正**：
+  - 「開啟影片」按鈕未載入播放器（黑畫面截圖）。
+  - 片尾按播放無反應。
+  - 影片解碼失敗無提示。
+  - 換片後對照圖殘留上一部影片。
+  - 截圖後按鈕維持停用外觀。
+  - 下拉選單焦點時方向鍵誤拖影片。
+  - 轉檔重按產生重複檔與重複索引。
+  - 輸出大小欄位永遠顯示「-」。
+- **版面**：預設 1180×800、最小 960×640；影片頁寬度 ≥ 1100 時採雙欄，窄螢幕右側可捲動。
+- **移除長截圖**：分頁、View、ViewModel、Service、Model 與 4 項測試；文件同步更新。
+
+## 異動檔案 (Changed Files)
+- 介面：`App.xaml`、`MainWindow.xaml(.cs)`、`Views/ImageConverterView.xaml`、`Views/VideoSnapshotView.xaml(.cs)`
+- 邏輯：`ViewModels/ImageConverterViewModel.cs`、`ViewModels/VideoSnapshotViewModel.cs`、`ViewModels/MainViewModel.cs`、`Models/ImageTaskItem.cs`
+- 刪除：`Models/LongScreenshotPage.cs`、`Services/ILongScreenshotService.cs`、`Services/LongScreenshotService.cs`、`ViewModels/LongScreenshotSplitViewModel.cs`、`Views/LongScreenshotSplitView.xaml(.cs)`
+- 測試：`tests/PoliceImageToolkit.CoreTests/Program.cs`、`.csproj`
+- 文件：`README.md`、`CHANGELOG.md`（Unreleased）、`MEMORY.md`、`AGENTS.md`、`IMPLEMENTATION_PLAN.md`、`.agents/skill.json`、`HANDOFF.md`
+
+## 刻意未修改 (Do Not Do / Deliberately Omitted)
+- 轉檔與截圖核心演算法（`ImageService`、`VideoService`、`OutputIndexService`）、`report_index.json` 結構。
+- 版本號維持 v11.4.0；未建置 `dist/`、未 Commit、未 Push、未發布 Release。
+
+## 尚未完成 (Remaining Work)
+- **P1 (阻斷/必須)**：無。
+- **P2 (重要/當次)**：由使用者決定是否提交，以及是否升版發布（建議 v12.0.0，因移除功能）。
+- **P3 (改善建議/暫緩)**：HEIC／MOV(HEVC) 依賴系統解碼器，未在本輪實測；高 DPI（125%／150%）未以真實縮放實測。
+
+## 驗證結果 (Validation)
+### 已執行測試與結果
+- `scripts/qa.ps1`：通過。內容包含 Git diff 格式檢查、敏感資訊掃描、Release 建置（0 警告 0 錯誤）、核心測試 4/4 PASS。
+- **UI 自動化實測**（UI Automation 實際點擊與開檔）：
+  - 視窗尺寸：1180×800、960×640、1920×1040。
+  - 圖片轉檔：3 張轉出，`report_index.json` 正常寫入；再按一次「開始」不會產生重複檔。
+  - 影片：以「開啟影片」按鈕載入後畫面正常，擷取 2 張 720×1280 截圖，時間戳與畫面一致。
+  - 長截圖分頁確認已不存在。
+- 各尺寸截圖已逐張檢查：無文字截斷、元件重疊或清單被擠壓。
+### 尚未驗證項目
+- 真實 iPhone HEIC／MOV 素材，以及實際 DPI 縮放下的顯示。
+### 已知風險 (Known Risks)
+- 舊版 `dist/` 發行包仍含長截圖功能，需重新建置發布後才會同步。
+
+## Git 狀態
+- Commit：561b5a3（本輪變更未提交）
+- Push：否
+- Working Tree：Modified
+- Branch：main
+
+## 下一步建議動作 (Next Recommended Action)
+使用者確認介面後，以 `design: 改版 2D 遊戲 Q 版介面並移除長截圖分頁` 提交；如要發布，執行 `scripts/build.ps1` 並更新版本與 CHANGELOG 版號。
+
+## 發布狀態 (Release Status)
+待使用者確認（程式可建置、測試通過，但尚未升版與重新打包）
