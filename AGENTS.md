@@ -7,6 +7,7 @@
 ## 1. 技術棧與建置規範
 - **主力架構**：C# 12 / .NET 8.0 WPF，保持原生秒開、獨立單檔發布（`PublishSingleFile=true`）與零環境依賴。
 - **.NET SDK 本機環境**：`.NET 8.0.406 SDK` 位於 `%LOCALAPPDATA%\Microsoft\dotnet`。CLI 建置與測試需確保 `DOTNET_ROOT` 正確設定。
+- **測試方式（重要）**：核心測試是自訂主控台程式（`tests/PoliceImageToolkit.CoreTests`，`OutputType=Exe`），**不是 xUnit**。`dotnet test` 會直接結束碼 0 卻一個測試都不執行，**不可當作通過證據**。請用 `scripts/test.ps1`（或 `dotnet run --project tests/PoliceImageToolkit.CoreTests`），並確認輸出「完成：N/N 項測試通過」；交付前用 `scripts/qa.ps1`。
 - **發布標準**：維持 `dist/PoliceImageToolkit.exe` 單檔發布與 `SHA256SUMS.txt` 雜湊驗證。
 
 ---
