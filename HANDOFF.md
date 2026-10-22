@@ -3,84 +3,51 @@
 ## 核心元資料 (Metadata)
 - **Repository**：lianghao02/Police-Image-Toolkit
 - **Branch**：main
-- **Commit SHA**：561b5a314ffc49d2eff0101e18a7785f95460c29（本輪未提交）
+- **Commit SHA**：75e27afeb747f233b3ee570238a9ba8e96a956d3（本輪修改前基準；本輪尚未提交）
 - **Skill Version**：v1.0.0
-- **Task Type**：IMPROVE
+- **Task Type**：FIX
 - **Local Path Hint**：03_Police-Image-Toolkit
 
 ---
 
-## 目前狀態
-可交付（未提交、未發布）
+P26-10-22：使用者已授權提交與發布。此提交包含本輪已驗證的修正文件。Tag、Release、部署與最終同步結果統一見控制中心 `docs/audit-release-20261022.md`，不得依提交前記錄重做修復。
 
 ## 本輪目標
-1. 依使用者要求將 WPF 介面全面改為 2D 遊戲 Q 版風格，並確保字體、框線、清單與底色的對比。
-2. 自行檢查功能與 Bug 並修正。
-3. 依使用者回饋（實際操作不便）移除「長截圖分頁輔助」整個功能。
+消除 AGENTS.md 前後互相矛盾的測試指令。
 
 ## 基準與已確認事實 (Baseline & Confirmed Facts)
-- 開始時 HEAD 為 `561b5a3`，Working Tree Clean，版本 v11.4.0。
-- 遊戲風格採「2D 遊戲 Q 版」（使用者指定，不另做選型）；只改視覺元件，不加入等級、經驗值等遊戲機制，功能名稱不變。
-- 長截圖功能移除是使用者明確決定，`AGENTS.md` 已記錄「勿再加回」。
+起始為上述分支／SHA，工作目錄乾淨。只修改本輪已重現問題；19 排除。
 
 ## 已完成 (Completed)
-- **Q 版主題**（`App.xaml` 集中管理，沿用舊資源鍵名）：
-  - 奶油圓點底、警務藍標題列、金色厚底分頁籤、深墨狀態列。
-  - 粗墨框貼紙卡片與金色標題徽章。
-  - 厚底按鍵樣式（藍／綠／紅／奶油／金）。
-  - TextBox、ComboBox、CheckBox、Slider、ProgressBar、ScrollBar、ToolTip 全面改寫範本。
-  - 清單改為斑馬紋圓角格子。
-- **對比驗算（WCAG）**：主要文字 13.9:1、次要 7.5:1、輔助 5.8:1、白字按鈕 ≥ 4.8:1、墨字金底 9.2:1。
-- **Bug 修正**：
-  - 「開啟影片」按鈕未載入播放器（黑畫面截圖）。
-  - 片尾按播放無反應。
-  - 影片解碼失敗無提示。
-  - 換片後對照圖殘留上一部影片。
-  - 截圖後按鈕維持停用外觀。
-  - 下拉選單焦點時方向鍵誤拖影片。
-  - 轉檔重按產生重複檔與重複索引。
-  - 輸出大小欄位永遠顯示「-」。
-- **版面**：預設 1180×800、最小 960×640；影片頁寬度 ≥ 1100 時採雙欄，窄螢幕右側可捲動。
-- **移除長截圖**：分頁、View、ViewModel、Service、Model 與 4 項測試；文件同步更新。
+第 4 節改用既有 scripts/test.ps1，與第 1 節說明一致；保留 dotnet test 對自訂主控台測試會零測試結束的警示。
 
 ## 異動檔案 (Changed Files)
-- 介面：`App.xaml`、`MainWindow.xaml(.cs)`、`Views/ImageConverterView.xaml`、`Views/VideoSnapshotView.xaml(.cs)`
-- 邏輯：`ViewModels/ImageConverterViewModel.cs`、`ViewModels/VideoSnapshotViewModel.cs`、`ViewModels/MainViewModel.cs`、`Models/ImageTaskItem.cs`
-- 刪除：`Models/LongScreenshotPage.cs`、`Services/ILongScreenshotService.cs`、`Services/LongScreenshotService.cs`、`ViewModels/LongScreenshotSplitViewModel.cs`、`Views/LongScreenshotSplitView.xaml(.cs)`
-- 測試：`tests/PoliceImageToolkit.CoreTests/Program.cs`、`.csproj`
-- 文件：`README.md`、`CHANGELOG.md`（Unreleased）、`MEMORY.md`、`AGENTS.md`、`IMPLEMENTATION_PLAN.md`、`.agents/skill.json`、`HANDOFF.md`
+AGENTS.md、HANDOFF.md。
 
 ## 刻意未修改 (Do Not Do / Deliberately Omitted)
-- 轉檔與截圖核心演算法（`ImageService`、`VideoService`、`OutputIndexService`）、`report_index.json` 結構。
-- 版本號維持 v11.4.0；未建置 `dist/`、未 Commit、未 Push、未發布 Release。
+未修改使用者原始資料、全域規則、其他工作階段成果或既有發布包。依本輪授權提交與部署。
 
 ## 尚未完成 (Remaining Work)
-- **P1 (阻斷/必須)**：無。
-- **P2 (重要/當次)**：由使用者決定是否提交，以及是否升版發布（建議 v12.0.0，因移除功能）。
-- **P3 (改善建議/暫緩)**：HEIC／MOV(HEVC) 依賴系統解碼器，未在本輪實測；高 DPI（125%／150%）未以真實縮放實測。
+- **P1 (阻斷/必須)**：本機修正無已知阻斷。
+- **P2 (重要/當次)**：發布前依下列限制補必要實測；本輪尚未部署。
+- **P3 (改善建議/暫緩)**：承接既有長截圖功能已移除且勿再加回的邊界；本輪不改產品、版本或發布包，也不重新宣稱原生 GUI 驗收。
 
 ## 驗證結果 (Validation)
 ### 已執行測試與結果
-- `scripts/qa.ps1`：通過。內容包含 Git diff 格式檢查、敏感資訊掃描、Release 建置（0 警告 0 錯誤）、核心測試 4/4 PASS。
-- **UI 自動化實測**（UI Automation 實際點擊與開檔）：
-  - 視窗尺寸：1180×800、960×640、1920×1040。
-  - 圖片轉檔：3 張轉出，`report_index.json` 正常寫入；再按一次「開始」不會產生重複檔。
-  - 影片：以「開啟影片」按鈕載入後畫面正常，擷取 2 張 720×1280 截圖，時間戳與畫面一致。
-  - 長截圖分頁確認已不存在。
-- 各尺寸截圖已逐張檢查：無文字截斷、元件重疊或清單被擠壓。
+核對 scripts/test.ps1 確實執行 dotnet run --project ... -c Release；確認 AGENTS 不再列出錯誤的 dotnet test 執行指令。純文件修改，未重跑 .NET 測試。
 ### 尚未驗證項目
-- 真實 iPhone HEIC／MOV 素材，以及實際 DPI 縮放下的顯示。
+承接既有長截圖功能已移除且勿再加回的邊界；本輪不改產品、版本或發布包，也不重新宣稱原生 GUI 驗收。
 ### 已知風險 (Known Risks)
-- 舊版 `dist/` 發行包仍含長截圖功能，需重新建置發布後才會同步。
+原始碼修正不會自動更新線上服務、已安裝 PWA 或舊下載包。
 
 ## Git 狀態
-- Commit：561b5a3（本輪變更未提交）
-- Push：否
-- Working Tree：Modified
-- Branch：main
+- Commit：本輪修正與發布準備合併為獨立提交；實際 SHA 見 Git 與中央發布報告。
+- Push：使用者已授權，本提交後執行並核對。
+- Working Tree：提交後確認 Clean；不包含被忽略的成品與測試環境。
+- Branch：main。
 
 ## 下一步建議動作 (Next Recommended Action)
-使用者確認介面後，以 `design: 改版 2D 遊戲 Q 版介面並移除長截圖分頁` 提交；如要發布，執行 `scripts/build.ps1` 並更新版本與 CHANGELOG 版號。
+核對中央 `docs/audit-release-20261022.md` 的實際發布結果；成功後停止擴大修改，僅保留已註明的人工驗收。
 
 ## 發布狀態 (Release Status)
-待使用者確認（程式可建置、測試通過，但尚未升版與重新打包）
+使用者已授權本輪發布；產品版本與實際 Release／部署核對結果以中央發布報告為準。人工驗收缺口不冒充通過。

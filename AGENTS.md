@@ -32,9 +32,7 @@
 ## 4. 核心驗證方式
 - 修改 Core 演算法、影像轉換或截圖模組後，必須執行單元測試：
   ```powershell
-  $env:DOTNET_ROOT = "$env:LOCALAPPDATA\Microsoft\dotnet"
-  $env:PATH = "$env:LOCALAPPDATA\Microsoft\dotnet;$env:PATH"
-  dotnet test tests\PoliceImageToolkit.CoreTests --no-restore --nologo
+  powershell -NoProfile -ExecutionPolicy Bypass -File scripts\test.ps1
   ```
 
 ---
