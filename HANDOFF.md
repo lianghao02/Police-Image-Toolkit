@@ -3,7 +3,7 @@
 ## 核心元資料 (Metadata)
 - **Repository**：lianghao02/Police-Image-Toolkit
 - **Branch**：main
-- **Commit SHA**：75e27afeb747f233b3ee570238a9ba8e96a956d3（本輪修改前基準；本輪尚未提交）
+- **Commit SHA**：75e27afeb747f233b3ee570238a9ba8e96a956d3（本輪修改前基準；本輪已提交，最新提交以 Git 記錄為準）
 - **Skill Version**：v1.0.0
 - **Task Type**：FIX
 - **Local Path Hint**：03_Police-Image-Toolkit
