@@ -125,27 +125,37 @@ public class VideoService : IVideoService
                 1.0
             );
 
+            var titleBrush = new SolidColorBrush(Color.FromRgb(220, 225, 235));
+            titleBrush.Freeze();
+
             var ftTitle = new FormattedText(
                 videoTitle,
                 CultureInfo.InvariantCulture,
                 FlowDirection.LeftToRight,
                 typeface,
                 fontSize * 0.75,
-                new SolidColorBrush(Color.FromRgb(220, 225, 235)),
+                titleBrush,
                 1.0
             );
 
             double padding = fontSize * 0.5;
+            double maxTitleWidth = Math.Max(40, width - ftTime.Width - padding * 3);
+            ftTitle.MaxTextWidth = maxTitleWidth;
+            ftTitle.MaxLineCount = 1;
+            ftTitle.Trimming = TextTrimming.CharacterEllipsis;
+
             double barHeight = ftTime.Height + padding * 2;
             double barY = height - barHeight;
 
             // 繪製半透明深色底條 (現代深邃黑藍底條)
             var bgBrush = new SolidColorBrush(Color.FromArgb(175, 10, 18, 30));
+            bgBrush.Freeze();
             dc.DrawRectangle(bgBrush, null, new Rect(0, barY, width, barHeight));
 
             // 繪製時間戳記與檔名
             dc.DrawText(ftTime, new Point(padding, barY + padding));
-            dc.DrawText(ftTitle, new Point(width - ftTitle.Width - padding, barY + padding + (ftTime.Height - ftTitle.Height) / 2));
+            double titleX = Math.Max(padding + ftTime.Width + padding, width - ftTitle.Width - padding);
+            dc.DrawText(ftTitle, new Point(titleX, barY + padding + (ftTime.Height - ftTitle.Height) / 2));
         }
 
         var renderBitmap = new RenderTargetBitmap(width, height, 96, 96, PixelFormats.Pbgra32);

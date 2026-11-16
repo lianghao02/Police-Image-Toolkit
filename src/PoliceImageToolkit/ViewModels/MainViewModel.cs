@@ -8,11 +8,13 @@ namespace PoliceImageToolkit.ViewModels;
 public class MainViewModel : ViewModelBase
 {
     private readonly IUpdateService _updateService;
+    private readonly IUserSettingsService _settingsService;
     private int _selectedTabIndex = 0;
-    private string _currentVersionDisplay = "v11.2.0";
+    private string _currentVersionDisplay = UpdateService.FallbackVersion;
     private bool _isCheckingUpdate = false;
 
-    public MainViewModel() : this(new ImageService(), new VideoService(), new OutputIndexService(), new UpdateService())
+    public MainViewModel()
+        : this(new ImageService(), new VideoService(), new OutputIndexService(), new UpdateService(), new UserSettingsService())
     {
     }
 
@@ -20,12 +22,16 @@ public class MainViewModel : ViewModelBase
         IImageService imageService,
         IVideoService videoService,
         IOutputIndexService outputIndexService,
-        IUpdateService updateService)
+        IUpdateService updateService,
+        IUserSettingsService? settingsService = null)
     {
         _updateService = updateService;
+        _settingsService = settingsService ?? new UserSettingsService();
 
-        ImageConverter = new ImageConverterViewModel(imageService, outputIndexService);
-        VideoSnapshot = new VideoSnapshotViewModel(videoService, outputIndexService);
+        var preferences = _settingsService.Load();
+
+        ImageConverter = new ImageConverterViewModel(imageService, outputIndexService, preferences, SavePreferences);
+        VideoSnapshot = new VideoSnapshotViewModel(videoService, outputIndexService, preferences, SavePreferences);
 
         CurrentVersionDisplay = _updateService.GetInstalledVersion();
         CheckUpdateCommand = new RelayCommand(async _ => await ExecuteCheckUpdateAsync(), _ => !IsCheckingUpdate);
@@ -67,6 +73,21 @@ public class MainViewModel : ViewModelBase
     public VideoSnapshotViewModel VideoSnapshot { get; }
     public ICommand CheckUpdateCommand { get; }
 
+    private void SavePreferences()
+    {
+        _settingsService.Save(new UserPreferences
+        {
+            ImageTargetFormat = ImageConverter.TargetFormat,
+            ImageJpgQuality = ImageConverter.JpgQuality,
+            ImageAutoOrient = ImageConverter.AutoOrient,
+            ImageMaxDimension = ImageConverter.MaxDimension,
+            VideoOutputFormat = VideoSnapshot.OutputFormat,
+            VideoJpgQuality = VideoSnapshot.JpgQuality,
+            VideoAddTimestampOverlay = VideoSnapshot.AddTimestampOverlay,
+            VideoIncludeMilliseconds = VideoSnapshot.IncludeMilliseconds
+        });
+    }
+
     private async Task ExecuteCheckUpdateAsync()
     {
         if (IsCheckingUpdate) return;
@@ -98,7 +119,6 @@ public class MainViewModel : ViewModelBase
 
                 case UpdateStatus.UpdateAvailable:
                     string notes = string.IsNullOrWhiteSpace(result.ReleaseNotes) ? "（無詳細說明）" : result.ReleaseNotes.Trim();
-                    // 若更新說明太長，適度截斷保持對話框精簡
                     if (notes.Length > 400)
                     {
                         notes = notes[..400] + "...\n(更多詳情請參閱 Release 頁面)";
@@ -117,11 +137,22 @@ public class MainViewModel : ViewModelBase
 
                     if (choice == MessageBoxResult.Yes)
                     {
-                        string targetUrl = !string.IsNullOrWhiteSpace(result.DownloadUrl)
+                        string targetUrl = UpdateService.IsSafeExternalUrl(result.DownloadUrl)
                             ? result.DownloadUrl
                             : result.ReleaseUrl;
 
-                        Process.Start(new ProcessStartInfo(targetUrl) { UseShellExecute = true });
+                        if (UpdateService.IsSafeExternalUrl(targetUrl))
+                        {
+                            Process.Start(new ProcessStartInfo(targetUrl) { UseShellExecute = true });
+                        }
+                        else
+                        {
+                            MessageBox.Show(
+                                "更新來源網址格式不正確或非 HTTPS 安全連線，已中止開啟瀏覽器。",
+                                "安全性提示",
+                                MessageBoxButton.OK,
+                                MessageBoxImage.Warning);
+                        }
                     }
                     break;
 

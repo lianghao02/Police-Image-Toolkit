@@ -9,10 +9,18 @@ using TaskStatus = PoliceImageToolkit.Models.TaskStatus;
 
 namespace PoliceImageToolkit.ViewModels;
 
+public sealed record MaxDimensionOption(string Label, int Value);
+
 public class ImageConverterViewModel : ViewModelBase
 {
+    private static readonly HashSet<string> SupportedExtensions = new(StringComparer.OrdinalIgnoreCase)
+    {
+        ".jpg", ".jpeg", ".png", ".heic", ".heif", ".webp", ".bmp", ".tif", ".tiff", ".gif"
+    };
+
     private readonly IImageService _imageService;
     private readonly IOutputIndexService _outputIndexService;
+    private readonly Action? _onPreferencesChanged;
     private CancellationTokenSource? _cts;
 
     private string _targetFormat = "JPG";
@@ -23,18 +31,37 @@ public class ImageConverterViewModel : ViewModelBase
     private bool _useCustomOutputDirectory = false;
     private bool _isProcessing = false;
     private double _overallProgress = 0;
-    private string _summaryText = "請拖曳圖片或點擊「新增檔案」開始";
+    private string _summaryText = "請拖曳圖片或資料夾，或點擊「新增檔案」開始";
 
-    public ImageConverterViewModel(IImageService imageService, IOutputIndexService outputIndexService)
+    public ImageConverterViewModel(
+        IImageService imageService,
+        IOutputIndexService outputIndexService,
+        UserPreferences? initialPreferences = null,
+        Action? onPreferencesChanged = null)
     {
         _imageService = imageService;
         _outputIndexService = outputIndexService;
+        _onPreferencesChanged = onPreferencesChanged;
         Tasks = new ObservableCollection<ImageTaskItem>();
+
+        if (initialPreferences != null)
+        {
+            if (Array.Exists(AvailableFormats, f => string.Equals(f, initialPreferences.ImageTargetFormat, StringComparison.OrdinalIgnoreCase)))
+            {
+                _targetFormat = initialPreferences.ImageTargetFormat.ToUpperInvariant();
+            }
+            _jpgQuality = Math.Clamp(initialPreferences.ImageJpgQuality, 10, 100);
+            _autoOrient = initialPreferences.ImageAutoOrient;
+            _maxDimension = MaxDimensionOptions.Any(o => o.Value == initialPreferences.ImageMaxDimension)
+                ? initialPreferences.ImageMaxDimension
+                : 0;
+        }
 
         AddFilesCommand = new RelayCommand(_ => ExecuteAddFiles(), _ => !IsProcessing);
         RemoveSelectedCommand = new RelayCommand(ExecuteRemoveSelected, _ => !IsProcessing);
         ClearAllCommand = new RelayCommand(_ => ExecuteClearAll(), _ => !IsProcessing && Tasks.Count > 0);
-        StartConvertCommand = new RelayCommand(async _ => await ExecuteStartConvertAsync(), _ => !IsProcessing && Tasks.Count > 0);
+        ResetStatusCommand = new RelayCommand(_ => ResetTasksForReconvert(), _ => !IsProcessing && Tasks.Any(t => t.Status != TaskStatus.Pending));
+        StartConvertCommand = new RelayCommand(async _ => await StartConvertAsync(), _ => !IsProcessing && Tasks.Count > 0);
         CancelConvertCommand = new RelayCommand(_ => ExecuteCancelConvert(), _ => IsProcessing);
         BrowseOutputDirectoryCommand = new RelayCommand(_ => ExecuteBrowseOutputDirectory());
         OpenOutputDirectoryCommand = new RelayCommand(
@@ -46,28 +73,61 @@ public class ImageConverterViewModel : ViewModelBase
 
     public string[] AvailableFormats { get; } = ["JPG", "PNG", "BMP", "TIFF"];
 
+    public MaxDimensionOption[] MaxDimensionOptions { get; } =
+    [
+        new("原尺寸 (不縮放)", 0),
+        new("長邊上限 2560 px", 2560),
+        new("長邊上限 1920 px", 1920),
+        new("長邊上限 1280 px", 1280),
+        new("長邊上限 800 px", 800)
+    ];
+
     public string TargetFormat
     {
         get => _targetFormat;
-        set => SetProperty(ref _targetFormat, value);
+        set
+        {
+            if (SetProperty(ref _targetFormat, value))
+            {
+                _onPreferencesChanged?.Invoke();
+            }
+        }
     }
 
     public int JpgQuality
     {
         get => _jpgQuality;
-        set => SetProperty(ref _jpgQuality, value);
+        set
+        {
+            if (SetProperty(ref _jpgQuality, value))
+            {
+                _onPreferencesChanged?.Invoke();
+            }
+        }
     }
 
     public bool AutoOrient
     {
         get => _autoOrient;
-        set => SetProperty(ref _autoOrient, value);
+        set
+        {
+            if (SetProperty(ref _autoOrient, value))
+            {
+                _onPreferencesChanged?.Invoke();
+            }
+        }
     }
 
     public int MaxDimension
     {
         get => _maxDimension;
-        set => SetProperty(ref _maxDimension, value);
+        set
+        {
+            if (SetProperty(ref _maxDimension, value))
+            {
+                _onPreferencesChanged?.Invoke();
+            }
+        }
     }
 
     public string OutputDirectory
@@ -119,40 +179,72 @@ public class ImageConverterViewModel : ViewModelBase
     public ICommand AddFilesCommand { get; }
     public ICommand RemoveSelectedCommand { get; }
     public ICommand ClearAllCommand { get; }
+    public ICommand ResetStatusCommand { get; }
     public ICommand StartConvertCommand { get; }
     public ICommand CancelConvertCommand { get; }
     public ICommand BrowseOutputDirectoryCommand { get; }
     public ICommand OpenOutputDirectoryCommand { get; }
 
-    public void AddFiles(IEnumerable<string> filePaths)
+    public int AddFiles(IEnumerable<string> inputPaths)
     {
+        var existingPaths = Tasks.Select(t => t.FilePath).ToHashSet(StringComparer.OrdinalIgnoreCase);
         int added = 0;
-        foreach (var path in filePaths)
-        {
-            if (!File.Exists(path)) continue;
 
-            string ext = Path.GetExtension(path).ToLowerInvariant();
-            if (ext is ".jpg" or ".jpeg" or ".png" or ".heic" or ".heif" or ".webp" or ".bmp" or ".tif" or ".tiff" or ".gif")
+        foreach (string candidate in ExpandPaths(inputPaths))
+        {
+            if (!File.Exists(candidate)) continue;
+
+            string ext = Path.GetExtension(candidate);
+            if (!SupportedExtensions.Contains(ext)) continue;
+            if (!existingPaths.Add(candidate)) continue;
+
+            var fi = new FileInfo(candidate);
+            Tasks.Add(new ImageTaskItem
             {
-                // 避免重複
-                if (Tasks.Any(t => t.FilePath.Equals(path, StringComparison.OrdinalIgnoreCase)))
+                FilePath = candidate,
+                FileName = fi.Name,
+                SourceFormat = ext.TrimStart('.').ToUpperInvariant(),
+                SourceSizeBytes = fi.Length
+            });
+            added++;
+        }
+
+        UpdateSummary();
+        return added;
+    }
+
+    private static IEnumerable<string> ExpandPaths(IEnumerable<string> inputPaths)
+    {
+        foreach (string path in inputPaths)
+        {
+            if (string.IsNullOrWhiteSpace(path)) continue;
+
+            if (File.Exists(path))
+            {
+                yield return path;
+            }
+            else if (Directory.Exists(path))
+            {
+                IEnumerable<string> files;
+                try
+                {
+                    files = Directory.EnumerateFiles(path, "*.*", new EnumerationOptions
+                    {
+                        RecurseSubdirectories = true,
+                        IgnoreInaccessible = true
+                    });
+                }
+                catch
                 {
                     continue;
                 }
 
-                var fi = new FileInfo(path);
-                Tasks.Add(new ImageTaskItem
+                foreach (string file in files)
                 {
-                    FilePath = path,
-                    FileName = fi.Name,
-                    SourceFormat = ext.TrimStart('.').ToUpperInvariant(),
-                    SourceSizeBytes = fi.Length
-                });
-                added++;
+                    yield return file;
+                }
             }
         }
-
-        UpdateSummary();
     }
 
     private void ExecuteAddFiles()
@@ -160,7 +252,7 @@ public class ImageConverterViewModel : ViewModelBase
         var dialog = new OpenFileDialog
         {
             Multiselect = true,
-            Filter = "支援影像格式 (*.jpg;*.jpeg;*.png;*.heic;*.heif;*.webp;*.bmp;*.tiff)|*.jpg;*.jpeg;*.png;*.heic;*.heif;*.webp;*.bmp;*.tif;*.tiff|所有檔案 (*.*)|*.*",
+            Filter = "支援影像格式 (*.jpg;*.jpeg;*.png;*.heic;*.heif;*.webp;*.bmp;*.tif;*.tiff;*.gif)|*.jpg;*.jpeg;*.png;*.heic;*.heif;*.webp;*.bmp;*.tif;*.tiff;*.gif|所有檔案 (*.*)|*.*",
             Title = "選擇要轉檔的手機圖片"
         };
 
@@ -186,15 +278,36 @@ public class ImageConverterViewModel : ViewModelBase
         UpdateSummary();
     }
 
-    private async Task ExecuteStartConvertAsync()
+    public void ResetTasksForReconvert()
+    {
+        if (IsProcessing || Tasks.Count == 0) return;
+
+        foreach (var task in Tasks)
+        {
+            task.Status = TaskStatus.Pending;
+            task.StatusMessage = "等待中";
+            task.Progress = 0;
+            task.OutputPath = string.Empty;
+            task.OutputSizeBytes = 0;
+            task.OutputWidth = 0;
+            task.OutputHeight = 0;
+            task.Elapsed = TimeSpan.Zero;
+        }
+
+        OverallProgress = 0;
+        SummaryText = $"已重設 {Tasks.Count} 筆項目為待處理，可調整設定後再次開始轉檔。";
+        CommandManager.InvalidateRequerySuggested();
+    }
+
+    public async Task StartConvertAsync()
     {
         if (Tasks.Count == 0 || IsProcessing) return;
 
-        // 已成功轉檔的項目不重複處理，避免再次按下時產生 _1、_2 重複檔與重複索引。
+        // 已成功轉檔的項目不重複處理，避免再次按下時產生 _1、_2 重複檔與重複索引；欲重轉可按「重設狀態」。
         var pendingTasks = Tasks.Where(t => t.Status != TaskStatus.Success).ToList();
         if (pendingTasks.Count == 0)
         {
-            SummaryText = "清單中的圖片皆已轉檔完成；如需重新轉檔，請清空清單後重新加入。";
+            SummaryText = "清單中的圖片皆已轉檔完成；若要以新設定重轉，請按「🔄 重設狀態」。";
             return;
         }
 
@@ -243,7 +356,7 @@ public class ImageConverterViewModel : ViewModelBase
                 int done = Interlocked.Increment(ref completed);
                 double pct = (double)done / total * 100;
 
-                App.Current.Dispatcher.Invoke(() =>
+                RunOnUIThread(() =>
                 {
                     OverallProgress = pct;
                     SummaryText = $"正在批次轉檔中 ({done} / {total}) - {pct:0}%";
@@ -347,27 +460,14 @@ public class ImageConverterViewModel : ViewModelBase
     {
         if (Tasks.Count == 0)
         {
-            SummaryText = "請拖曳圖片或點擊「新增檔案」開始";
+            SummaryText = "請拖曳圖片或資料夾，或點擊「新增檔案」開始";
         }
         else
         {
             long totalBytes = Tasks.Sum(t => t.SourceSizeBytes);
-            SummaryText = $"已載入 {Tasks.Count} 張圖片 (合計 {FormatBytes(totalBytes)})";
+            SummaryText = $"已載入 {Tasks.Count} 張圖片 (合計 {ByteSizeFormatter.Format(totalBytes)})";
         }
 
         CommandManager.InvalidateRequerySuggested();
-    }
-
-    private static string FormatBytes(long bytes)
-    {
-        string[] suffixes = ["B", "KB", "MB", "GB"];
-        int order = 0;
-        double len = bytes;
-        while (len >= 1024 && order < suffixes.Length - 1)
-        {
-            order++;
-            len /= 1024;
-        }
-        return $"{len:0.##} {suffixes[order]}";
     }
 }

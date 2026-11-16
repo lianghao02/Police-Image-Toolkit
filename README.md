@@ -1,6 +1,6 @@
-# 🛡️ 警務手機影像轉檔與逐格截圖系統 Police-Image-Toolkit (v11.4.0)
+# 🛡️ 警務手機影像轉檔與逐格截圖系統 Police-Image-Toolkit (v11.5.0)
 
-[![Version](https://img.shields.io/badge/version-v11.4.0-blue.svg)](https://github.com/lianghao02/Police-Image-Toolkit/releases)
+[![Version](https://img.shields.io/badge/version-v11.5.0-blue.svg)](https://github.com/lianghao02/Police-Image-Toolkit/releases)
 [![Platform](https://img.shields.io/badge/Platform-Windows%20x64-0078D6.svg)](https://microsoft.com/windows)
 [![.NET](https://img.shields.io/badge/.NET-8.0%20LTS-purple.svg)](https://dotnet.microsoft.com)
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
@@ -24,7 +24,7 @@
 | 下載項目 | 格式 | 說明 | 連結 |
 |:---|:---:|:---|:---:|
 | **PoliceImageToolkit.exe** | `.exe` | **推薦**。免安裝單一執行檔，下載後直接雙擊開啟 | [⬇️ 點此直接下載（最新版）](https://github.com/lianghao02/Police-Image-Toolkit/releases/latest/download/PoliceImageToolkit.exe) |
-| **PoliceImageToolkit-v11.4.0-win-x64.zip** | `.zip` | 壓縮包（適用於被瀏覽器或端點限制直接下載 exe 之環境） | [📦 點此下載 ZIP 壓縮檔](https://github.com/lianghao02/Police-Image-Toolkit/releases/latest/download/PoliceImageToolkit-v11.4.0-win-x64.zip) |
+| **PoliceImageToolkit-v11.5.0-win-x64.zip** | `.zip` | 壓縮包（適用於被瀏覽器或端點限制直接下載 exe 之環境） | [📦 點此下載 ZIP 壓縮檔](https://github.com/lianghao02/Police-Image-Toolkit/releases/latest/download/PoliceImageToolkit-v11.5.0-win-x64.zip) |
 
 > 🔗 想下載歷史版本或查看詳細更新紀錄，請至 [GitHub Releases 頁面](https://github.com/lianghao02/Police-Image-Toolkit/releases)。
 
@@ -39,7 +39,7 @@
 3. **若出現 Windows SmartScreen 防護提示**：
    * 由於本程式為內部獨立編譯開源軟體，未購買微軟商業數位憑證，Windows 可能跳出「*Windows 已保護您的電腦*」藍色提示。
    * 請點擊 **「其他資訊」** ➜ 再點擊 **「仍要執行」** 即可正常啟動。
-4. **驗證發布檔**：`dist\SHA256SUMS.txt` 與 `使用說明.txt` 會隨本機發布產生，可用 `Get-FileHash .\PoliceImageToolkit.exe -Algorithm SHA256` 比對雜湊值。
+4. **驗證發布檔**：`dist\SHA256SUMS.txt` 與 `dist\GUIDE.txt` 會隨本機發布產生，可用 `Get-FileHash .\PoliceImageToolkit.exe -Algorithm SHA256` 比對雜湊值。
 
 ---
 
@@ -48,12 +48,12 @@
 ### 1. 📁 手機圖片高速批次轉檔 (Image Batch Converter)
 專門解決外勤人員收到民眾 iPhone (HEIC) 或 Android (WebP) 照片無法在公務電腦開啟的問題。
 
-* **支援格式**：iPhone `HEIC`/`HEIF`、Android `WebP`、`PNG`、`JPG`、`BMP`、`TIFF`。
+* **支援格式**：iPhone `HEIC`/`HEIF`、Android `WebP`、`PNG`、`JPG`、`BMP`、`TIFF`、`GIF`（單幀）。
 * **操作方式**：
-  1. 將照片批次**拖曳**進主視窗。
+  1. 將照片或整個資料夾批次**拖曳**進主視窗（會自動遞迴掃描並去重）。
   2. 選擇目標輸出格式（預設轉為相容性最高之 `JPG`）。
-  3. 設定壓縮品質（預設 90%）與是否限制最大寬高（預設等比例原尺寸）。
-  4. 點擊 **「開始批次轉檔」**，多核心平行處理，百張相片瞬間完成。
+  3. 設定壓縮品質（JPG 時有效，預設 90%）與長邊尺寸限制（預設原尺寸不縮放）。
+  4. 點擊 **「開始批次轉檔」**，多核心平行處理；若想更改設定重轉同一批圖檔，可按 **「🔄 重設狀態」**。
 * **智慧方向校正**：自動辨識手機拍攝 Exif 中繼資料，修正旋轉角度，轉出正常視角圖檔。
 
 ---
@@ -71,7 +71,7 @@
   | **`↑` / `↓`** 或 **`W` / `S`** | **快進 / 快退 1.0 秒** |
   | **`Z`** | **復原 / 刪除上一張截圖**（防誤截快速清理） |
   | **`P`** 或 **`Enter`** | **播放 / 暫停影片** |
-* **純淨原始輸出**：輸出 100% 原始解析度圖檔；每部影片各自輸出至專屬資料夾，預設以 `001.png`、`002.png` 連續排序，可選填前綴。
+* **純淨原始輸出**：截圖直接依影片視訊軌原始解析度繪製（不受預覽手機框縮放或黑邊影響）；每部影片各自輸出至專屬資料夾，預設以 `001.png`、`002.png` 連續排序，可選填前綴、切換 JPG 品質與浮水印毫秒顯示。
 * **輸出可追溯**：輸出資料夾會更新 `report_index.json`，保留輸出檔名、來源檔名、影片時間與像素尺寸；不寫入絕對路徑、案號或其他個資。
 
 ---
@@ -124,26 +124,35 @@
 ### 專案結構
 ```text
 03_Police-Image-Toolkit/
+├── RUN.bat                       # 本機一鍵啟動入口（優先啟動 dist\EXE，否則以開發專案執行）
+├── BUILD.bat                     # 一鍵 QA 檢核與單檔發布入口
 ├── src/
 │   └── PoliceImageToolkit/       # 🚀【C# .NET 8 WPF 原生桌面專案】
 │       ├── app.ico / app_icon.png# 專屬警務鑑識圖示
-│       ├── version.txt           # 當前版本宣告檔 (v11.4.0)
-│       ├── Models/               # 轉檔與影片快照資料模型
-│       ├── Services/             # 轉檔、影片截圖與更新檢查引擎
+│       ├── version.txt           # 當前版本宣告檔 (v11.5.0)
+│       ├── Models/               # 轉檔、影片快照資料模型與格式工具
+│       ├── Services/             # 轉檔、影片截圖、追溯索引、偏好設定與更新檢查引擎
 │       ├── ViewModels/           # MVVM 架構邏輯
 │       └── Views/                # 2D 遊戲 Q 版風格 WPF 介面
-├── dist/                         # 發行成品：EXE、version.txt、SHA256SUMS.txt、使用說明.txt
+├── tests/
+│   └── PoliceImageToolkit.CoreTests/ # 自訂主控台核心測試專案
+├── dist/                         # 發行成品：EXE、version.txt、SHA256SUMS.txt、GUIDE.txt
 └── scripts/
-    ├── build.ps1                 # 一鍵發布單檔 Exe (含快取清理、無 pdb、圖示快取重新整理)
+    ├── run.ps1                   # 本機啟動腳本
+    ├── test.ps1                  # 執行 CoreTests 核心測試
+    ├── build.ps1                 # 一鍵發布單檔 Exe (含快取清理、無 pdb、產出 GUIDE.txt)
     └── qa.ps1                    # QA 檢核與建置測試腳本
 ```
 
 ### 本機建置發布指令
 ```powershell
+# 執行核心服務測試
+powershell -ExecutionPolicy Bypass -File .\scripts\test.ps1
+
 # 執行 QA 與語法建置檢核
 powershell -ExecutionPolicy Bypass -File .\scripts\qa.ps1
 
-# 發布單檔獨立免安裝 Exe (產出於 dist/PoliceImageToolkit.exe)
+# 發布單檔獨立免安裝 Exe (產出於 dist\PoliceImageToolkit.exe)
 powershell -ExecutionPolicy Bypass -File .\scripts\build.ps1
 ```
 

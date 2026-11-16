@@ -13,6 +13,7 @@ public class VideoSnapshotViewModel : ViewModelBase
 {
     private readonly IVideoService _videoService;
     private readonly IOutputIndexService _outputIndexService;
+    private readonly Action? _onPreferencesChanged;
 
     private string _videoPath = string.Empty;
     private string _videoTitle = "尚未載入影片";
@@ -20,6 +21,7 @@ public class VideoSnapshotViewModel : ViewModelBase
     private TimeSpan _currentPosition = TimeSpan.Zero;
     private bool _isPlaying = false;
     private bool _hasVideoLoaded = false;
+    private bool _isLoadingVideo = false;
     private string _statusMessage = "請拖曳手機影片 (MOV/MP4) 或點擊「開啟影片」";
 
     // 快照設定
@@ -35,11 +37,26 @@ public class VideoSnapshotViewModel : ViewModelBase
     private SnapshotResult? _lastCapturedSnapshot;
     private bool _isCapturing = false;
 
-    public VideoSnapshotViewModel(IVideoService videoService, IOutputIndexService outputIndexService)
+    public VideoSnapshotViewModel(
+        IVideoService videoService,
+        IOutputIndexService outputIndexService,
+        UserPreferences? initialPreferences = null,
+        Action? onPreferencesChanged = null)
     {
         _videoService = videoService;
         _outputIndexService = outputIndexService;
+        _onPreferencesChanged = onPreferencesChanged;
         Snapshots = new ObservableCollection<SnapshotResult>();
+
+        if (initialPreferences != null)
+        {
+            _outputFormat = string.Equals(initialPreferences.VideoOutputFormat, "JPG", StringComparison.OrdinalIgnoreCase)
+                ? "JPG"
+                : "PNG";
+            _jpgQuality = Math.Clamp(initialPreferences.VideoJpgQuality, 10, 100);
+            _addTimestampOverlay = initialPreferences.VideoAddTimestampOverlay;
+            _includeMilliseconds = initialPreferences.VideoIncludeMilliseconds;
+        }
 
         OpenVideoCommand = new RelayCommand(_ => ExecuteOpenVideo());
         PlayPauseCommand = new RelayCommand(_ => ExecutePlayPause(), _ => HasVideoLoaded);
@@ -109,7 +126,7 @@ public class VideoSnapshotViewModel : ViewModelBase
         get => CurrentPosition.TotalSeconds;
         set
         {
-            if (Math.Abs(CurrentPosition.TotalSeconds - value) > 0.03)
+            if (HasVideoLoaded && Math.Abs(CurrentPosition.TotalSeconds - value) > 0.03)
             {
                 var ts = TimeSpan.FromSeconds(Math.Clamp(value, 0, DurationSeconds));
                 RequestSeek?.Invoke(ts);
@@ -138,6 +155,12 @@ public class VideoSnapshotViewModel : ViewModelBase
         }
     }
 
+    public bool IsLoadingVideo
+    {
+        get => _isLoadingVideo;
+        set => SetProperty(ref _isLoadingVideo, value);
+    }
+
     public string StatusMessage
     {
         get => _statusMessage;
@@ -153,25 +176,49 @@ public class VideoSnapshotViewModel : ViewModelBase
     public string OutputFormat
     {
         get => _outputFormat;
-        set => SetProperty(ref _outputFormat, value);
+        set
+        {
+            if (SetProperty(ref _outputFormat, value))
+            {
+                _onPreferencesChanged?.Invoke();
+            }
+        }
     }
 
     public int JpgQuality
     {
         get => _jpgQuality;
-        set => SetProperty(ref _jpgQuality, value);
+        set
+        {
+            if (SetProperty(ref _jpgQuality, value))
+            {
+                _onPreferencesChanged?.Invoke();
+            }
+        }
     }
 
     public bool AddTimestampOverlay
     {
         get => _addTimestampOverlay;
-        set => SetProperty(ref _addTimestampOverlay, value);
+        set
+        {
+            if (SetProperty(ref _addTimestampOverlay, value))
+            {
+                _onPreferencesChanged?.Invoke();
+            }
+        }
     }
 
     public bool IncludeMilliseconds
     {
         get => _includeMilliseconds;
-        set => SetProperty(ref _includeMilliseconds, value);
+        set
+        {
+            if (SetProperty(ref _includeMilliseconds, value))
+            {
+                _onPreferencesChanged?.Invoke();
+            }
+        }
     }
 
     public bool AutoCreateSubfolder
@@ -220,21 +267,33 @@ public class VideoSnapshotViewModel : ViewModelBase
 
         if (IsPlaying) RequestPause?.Invoke();
         IsPlaying = false;
+        // 播放器非同步開檔完成並觸發 MediaOpened 前，先鎖定截圖與播放操作，避免截到空白黑畫面。
+        HasVideoLoaded = false;
+        IsLoadingVideo = true;
         VideoPath = path;
         VideoTitle = Path.GetFileName(path);
         Duration = TimeSpan.Zero;
         CurrentPosition = TimeSpan.Zero;
         // 換片後清除上一部影片的對照圖，避免以他片末行判斷是否漏截；已擷取清單保留。
         LastCapturedSnapshot = null;
-        HasVideoLoaded = true;
-        StatusMessage = $"已載入影片：{VideoTitle} (按空白鍵 Space 擷取，←/→ 鍵微調)";
+        StatusMessage = $"正在載入影片：{VideoTitle}...";
 
         // 由 View 實際指定播放器來源；按鈕開檔與拖曳開檔共用同一路徑。
         RequestLoadVideo?.Invoke(path);
     }
 
+    public void MarkVideoOpened(TimeSpan duration)
+    {
+        IsLoadingVideo = false;
+        Duration = duration;
+        CurrentPosition = TimeSpan.Zero;
+        HasVideoLoaded = true;
+        StatusMessage = $"已載入影片：{VideoTitle} (按空白鍵 Space 擷取，←/→ 鍵微調)";
+    }
+
     public void MarkVideoLoadFailed(string reason)
     {
+        IsLoadingVideo = false;
         HasVideoLoaded = false;
         IsPlaying = false;
         Duration = TimeSpan.Zero;
@@ -313,7 +372,7 @@ public class VideoSnapshotViewModel : ViewModelBase
             var frame = RequestCurrentFrame.Invoke();
             if (frame == null)
             {
-                StatusMessage = "截圖失敗：未能擷取畫面緩衝區。";
+                StatusMessage = "截圖失敗：影片視訊軌尚未就緒或無法取得畫面緩衝區。";
                 return null;
             }
 
@@ -355,7 +414,7 @@ public class VideoSnapshotViewModel : ViewModelBase
             }
 
             // 4. 更新 UI 與「上頁末行對照圖」
-            App.Current.Dispatcher.Invoke(() =>
+            RunOnUIThread(() =>
             {
                 Snapshots.Insert(0, res);
                 LastCapturedSnapshot = res;
@@ -372,7 +431,6 @@ public class VideoSnapshotViewModel : ViewModelBase
         finally
         {
             _isCapturing = false;
-            // 擷取完成後立即重新評估按鈕狀態，否則截圖鈕會維持停用外觀直到下一次滑鼠或鍵盤輸入。
             CommandManager.InvalidateRequerySuggested();
         }
     }
@@ -503,12 +561,12 @@ public class VideoSnapshotViewModel : ViewModelBase
         string? capturedDirectory = Snapshots.FirstOrDefault() is { } snapshot
             ? Path.GetDirectoryName(snapshot.FilePath)
             : null;
-        string? configuredSnapshotDirectory = HasVideoLoaded && !string.IsNullOrWhiteSpace(OutputDirectory)
+        string? configuredSnapshotDirectory = !string.IsNullOrWhiteSpace(VideoPath) && !string.IsNullOrWhiteSpace(OutputDirectory)
             ? Path.Combine(OutputDirectory, $"{Path.GetFileNameWithoutExtension(VideoPath)}_Snapshots")
             : null;
         string dir = capturedDirectory
             ?? configuredSnapshotDirectory
-            ?? (HasVideoLoaded ? Path.Combine(Path.GetDirectoryName(VideoPath) ?? string.Empty, $"{Path.GetFileNameWithoutExtension(VideoPath)}_Snapshots") : null)
+            ?? (!string.IsNullOrWhiteSpace(VideoPath) ? Path.Combine(Path.GetDirectoryName(VideoPath) ?? string.Empty, $"{Path.GetFileNameWithoutExtension(VideoPath)}_Snapshots") : null)
             ?? Environment.GetFolderPath(Environment.SpecialFolder.Desktop);
 
         if (Directory.Exists(dir))

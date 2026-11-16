@@ -6,12 +6,11 @@ public record ImageConvertOptions(
     string TargetFormat,
     int JpgQuality,
     string OutputDirectory,
-    bool AutoOrient,
+    bool AutoOrient = true,
     int MaxDimension = 0
 );
 
 public interface IImageService
 {
     Task ConvertAsync(ImageTaskItem item, ImageConvertOptions options, CancellationToken ct = default);
-    Task<string> ExtractExifSummaryAsync(string filePath);
 }

@@ -9,6 +9,7 @@
              d:DesignHeight="760" d:DesignWidth="1100"
              AllowDrop="True"
              Loaded="UserControl_Loaded"
+             Unloaded="UserControl_Unloaded"
              SizeChanged="UserControl_SizeChanged"
              Drop="UserControl_Drop"
              DragOver="UserControl_DragOver">
@@ -69,12 +70,8 @@
                             <Border Margin="0,0,0,5" Background="{StaticResource PhoneScreenColor}" BorderBrush="{StaticResource PhoneFrameColor}" BorderThickness="7"
                                     CornerRadius="30" ClipToBounds="True">
                                 <Grid>
-                                    <!-- 影片播放器主畫面 -->
-                                    <MediaElement x:Name="Player" LoadedBehavior="Manual" UnloadedBehavior="Stop"
-                                                  ScrubbingEnabled="True" Stretch="Uniform"
-                                                  MediaOpened="Player_MediaOpened"
-                                                  MediaEnded="Player_MediaEnded"
-                                                  MediaFailed="Player_MediaFailed"/>
+                                    <!-- 影片播放器主畫面 (原生 MediaPlayer + DrawingImage，截圖直接取原始視訊軌解析度) -->
+                                    <Image x:Name="PlayerDisplay" Stretch="Uniform"/>
 
                                     <!-- 未載入影片待機畫面 -->
                                     <Grid Panel.ZIndex="2" Visibility="{Binding HasVideoLoaded, Converter={StaticResource InverseBoolToVisConverter}}">
@@ -226,7 +223,23 @@
                             </ComboBox>
                         </Grid>
 
-                        <CheckBox IsChecked="{Binding AddTimestampOverlay}" Content="烙印時間戳記浮水印 (hh:mm:ss.fff)" Margin="0,2,0,6"/>
+                        <Grid Margin="0,0,0,8"
+                              Visibility="{Binding OutputFormat, Converter={StaticResource StringEqualsToVisConverter}, ConverterParameter=JPG}">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto"/>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Text="JPG 品質：" Style="{StaticResource FormLabelTextStyle}" VerticalAlignment="Center"/>
+                            <Slider Grid.Column="1" Value="{Binding JpgQuality}" Minimum="10" Maximum="100" Margin="6,0,6,0"
+                                    IsSnapToTickEnabled="True" TickFrequency="1" SmallChange="1" LargeChange="10" VerticalAlignment="Center"/>
+                            <TextBlock Grid.Column="2" Text="{Binding JpgQuality, StringFormat={}{0}%}" FontWeight="Bold"
+                                       FontFamily="{StaticResource NumberFont}" FontSize="12" VerticalAlignment="Center" Width="38" TextAlignment="Right"/>
+                        </Grid>
+
+                        <CheckBox IsChecked="{Binding AddTimestampOverlay}" Content="烙印時間戳記浮水印" Margin="0,2,0,4"/>
+                        <CheckBox IsChecked="{Binding IncludeMilliseconds}" Content="浮水印顯示毫秒 (.fff)" Margin="22,0,0,6"
+                                  Visibility="{Binding AddTimestampOverlay, Converter={StaticResource BoolToVisConverter}}"/>
                         <TextBlock Text="每部影片會自動建立獨立 Snapshots 資料夾，檔名依 001、002… 排序。"
                                    Style="{StaticResource HelperTextStyle}" Margin="0,0,0,8" TextWrapping="Wrap"/>
 
@@ -276,7 +289,13 @@
                                         </Border>
 
                                         <StackPanel Grid.Column="1" VerticalAlignment="Center">
-                                            <TextBlock Text="{Binding Timestamp, StringFormat={}{0:hh\\:mm\\:ss\\.fff}}" FontWeight="Bold" Foreground="{StaticResource AccentPrimary}" FontSize="13" FontFamily="{StaticResource NumberFont}"/>
+                                            <StackPanel Orientation="Horizontal">
+                                                <TextBlock Text="{Binding FilePath, Converter={StaticResource FileNameFromPathConverter}}"
+                                                           FontWeight="Bold" Foreground="{StaticResource TextPrimary}" FontSize="13" Margin="0,0,6,0"/>
+                                                <TextBlock Text="{Binding Timestamp, StringFormat={}{0:hh\\:mm\\:ss\\.fff}}"
+                                                           FontWeight="Bold" Foreground="{StaticResource AccentPrimary}" FontSize="12"
+                                                           FontFamily="{StaticResource NumberFont}" VerticalAlignment="Center"/>
+                                            </StackPanel>
                                             <TextBlock Text="{Binding FilePath}" FontSize="11" Foreground="{StaticResource TextSecondary}" TextTrimming="CharacterEllipsis" ToolTip="{Binding FilePath}"/>
                                         </StackPanel>
 

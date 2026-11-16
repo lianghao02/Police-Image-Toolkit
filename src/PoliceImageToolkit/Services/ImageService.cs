@@ -23,6 +23,7 @@ public class ImageService : IImageService
             string? reservedOutputPath = null;
             try
             {
+                ct.ThrowIfCancellationRequested();
                 if (!File.Exists(item.FilePath))
                 {
                     throw new FileNotFoundException("找不到來源檔案", item.FilePath);
@@ -39,12 +40,12 @@ public class ImageService : IImageService
                 ct.ThrowIfCancellationRequested();
                 item.Progress = 30;
 
-                // 讀取影像至記憶體
+                // 讀取影像至記憶體（OnLoad 確保檔案解碼完成，不保留串流鎖定）
                 using var fs = new FileStream(item.FilePath, FileMode.Open, FileAccess.Read, FileShare.Read);
                 var decoder = BitmapDecoder.Create(
                     fs,
                     BitmapCreateOptions.PreservePixelFormat | BitmapCreateOptions.IgnoreColorProfile,
-                    BitmapCacheOption.OnDemand
+                    BitmapCacheOption.OnLoad
                 );
 
                 if (decoder.Frames.Count == 0)
@@ -83,8 +84,15 @@ public class ImageService : IImageService
                     if (maxSide > options.MaxDimension)
                     {
                         double scale = (double)options.MaxDimension / maxSide;
-                        processedBitmap = new TransformedBitmap(processedBitmap, new ScaleTransform(scale, scale));
+                        var scaled = new TransformedBitmap(processedBitmap, new ScaleTransform(scale, scale));
+                        scaled.Freeze();
+                        processedBitmap = scaled;
                     }
+                }
+
+                if (processedBitmap.CanFreeze && !processedBitmap.IsFrozen)
+                {
+                    processedBitmap.Freeze();
                 }
 
                 item.Progress = 75;
@@ -96,10 +104,11 @@ public class ImageService : IImageService
                     "png" => new PngBitmapEncoder(),
                     "bmp" => new BmpBitmapEncoder(),
                     "tif" or "tiff" => new TiffBitmapEncoder(),
-                    _ => new JpegBitmapEncoder
+                    "jpg" => new JpegBitmapEncoder
                     {
                         QualityLevel = Math.Clamp(options.JpgQuality, 10, 100)
-                    }
+                    },
+                    _ => throw new NotSupportedException($"不支援的目標輸出格式：.{ext}")
                 };
 
                 encoder.Frames.Add(BitmapFrame.Create(processedBitmap));
@@ -134,29 +143,6 @@ public class ImageService : IImageService
                 item.Status = TaskStatus.Failed;
                 item.StatusMessage = $"失敗: {GetUserFriendlyError(item.FilePath, ex)}";
             }
-        }, ct);
-    }
-
-    public Task<string> ExtractExifSummaryAsync(string filePath)
-    {
-        return Task.Run(() =>
-        {
-            try
-            {
-                using var fs = new FileStream(filePath, FileMode.Open, FileAccess.Read, FileShare.Read);
-                var decoder = BitmapDecoder.Create(fs, BitmapCreateOptions.None, BitmapCacheOption.None);
-                if (decoder.Frames.Count > 0 && decoder.Frames[0].Metadata is BitmapMetadata metadata)
-                {
-                    string camera = metadata.CameraModel ?? "未知型號";
-                    string date = metadata.DateTaken ?? "無拍攝時間";
-                    return $"相機: {camera} | 拍攝時間: {date}";
-                }
-            }
-            catch
-            {
-                // 忽略非標準中繼資料錯誤
-            }
-            return "無 Exif 中繼資料";
         });
     }
 
@@ -241,6 +227,8 @@ public class ImageService : IImageService
             return source;
         }
 
-        return new TransformedBitmap(source, transform);
+        var transformed = new TransformedBitmap(source, transform);
+        transformed.Freeze();
+        return transformed;
     }
 }

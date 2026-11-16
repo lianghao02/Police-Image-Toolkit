@@ -9,18 +9,23 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <Compile Include="..\..\src\PoliceImageToolkit\Services\IUpdateService.cs" Link="Services\IUpdateService.cs" />
-    <Compile Include="..\..\src\PoliceImageToolkit\Services\UpdateService.cs" Link="Services\UpdateService.cs" />
-    <Compile Include="..\..\src\PoliceImageToolkit\Models\VideoSnapshotConfig.cs" Link="Models\VideoSnapshotConfig.cs" />
-    <Compile Include="..\..\src\PoliceImageToolkit\Services\IVideoService.cs" Link="Services\IVideoService.cs" />
-    <Compile Include="..\..\src\PoliceImageToolkit\Services\VideoService.cs" Link="Services\VideoService.cs" />
-    <Compile Include="..\..\src\PoliceImageToolkit\Models\OutputIndexEntry.cs" Link="Models\OutputIndexEntry.cs" />
-    <Compile Include="..\..\src\PoliceImageToolkit\Services\IOutputIndexService.cs" Link="Services\IOutputIndexService.cs" />
-    <Compile Include="..\..\src\PoliceImageToolkit\Services\OutputIndexService.cs" Link="Services\OutputIndexService.cs" />
-    <Compile Include="..\..\src\PoliceImageToolkit\ViewModels\ViewModelBase.cs" Link="ViewModels\ViewModelBase.cs" />
+    <Compile Include="..\..\src\PoliceImageToolkit\Models\ByteSizeFormatter.cs" Link="Models\ByteSizeFormatter.cs" />
     <Compile Include="..\..\src\PoliceImageToolkit\Models\ImageTaskItem.cs" Link="Models\ImageTaskItem.cs" />
+    <Compile Include="..\..\src\PoliceImageToolkit\Models\OutputIndexEntry.cs" Link="Models\OutputIndexEntry.cs" />
+    <Compile Include="..\..\src\PoliceImageToolkit\Models\VideoSnapshotConfig.cs" Link="Models\VideoSnapshotConfig.cs" />
     <Compile Include="..\..\src\PoliceImageToolkit\Services\IImageService.cs" Link="Services\IImageService.cs" />
     <Compile Include="..\..\src\PoliceImageToolkit\Services\ImageService.cs" Link="Services\ImageService.cs" />
+    <Compile Include="..\..\src\PoliceImageToolkit\Services\IOutputIndexService.cs" Link="Services\IOutputIndexService.cs" />
+    <Compile Include="..\..\src\PoliceImageToolkit\Services\OutputIndexService.cs" Link="Services\OutputIndexService.cs" />
+    <Compile Include="..\..\src\PoliceImageToolkit\Services\IUpdateService.cs" Link="Services\IUpdateService.cs" />
+    <Compile Include="..\..\src\PoliceImageToolkit\Services\UpdateService.cs" Link="Services\UpdateService.cs" />
+    <Compile Include="..\..\src\PoliceImageToolkit\Services\UserSettingsService.cs" Link="Services\UserSettingsService.cs" />
+    <Compile Include="..\..\src\PoliceImageToolkit\Services\IVideoService.cs" Link="Services\IVideoService.cs" />
+    <Compile Include="..\..\src\PoliceImageToolkit\Services\VideoService.cs" Link="Services\VideoService.cs" />
+    <Compile Include="..\..\src\PoliceImageToolkit\ViewModels\ViewModelBase.cs" Link="ViewModels\ViewModelBase.cs" />
+    <Compile Include="..\..\src\PoliceImageToolkit\ViewModels\RelayCommand.cs" Link="ViewModels\RelayCommand.cs" />
+    <Compile Include="..\..\src\PoliceImageToolkit\ViewModels\ImageConverterViewModel.cs" Link="ViewModels\ImageConverterViewModel.cs" />
+    <Compile Include="..\..\src\PoliceImageToolkit\ViewModels\VideoSnapshotViewModel.cs" Link="ViewModels\VideoSnapshotViewModel.cs" />
   </ItemGroup>
 
 </Project>

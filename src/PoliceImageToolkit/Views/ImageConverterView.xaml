@@ -34,6 +34,8 @@
 
                 <StackPanel Grid.Column="2" Orientation="Horizontal" HorizontalAlignment="Right">
                     <Button Content="➕ 新增檔案" Command="{Binding AddFilesCommand}" Style="{StaticResource PrimaryButtonStyle}" Margin="0,0,8,0"/>
+                    <Button Content="🔄 重設狀態" Command="{Binding ResetStatusCommand}" Style="{StaticResource SecondaryButtonStyle}" Margin="0,0,8,0"
+                            ToolTip="保留清單並重設為待處理，方便切換格式或尺寸後重新轉檔"/>
                     <Button Content="🗑️ 清空清單" Command="{Binding ClearAllCommand}" Style="{StaticResource SecondaryButtonStyle}"/>
                 </StackPanel>
             </Grid>
@@ -52,7 +54,7 @@
                             <Ellipse Fill="{StaticResource GoldFace}" Stroke="{StaticResource Ink}" StrokeThickness="2.5" Margin="0,0,0,5"/>
                             <TextBlock Text="📥" FontSize="32" HorizontalAlignment="Center" VerticalAlignment="Center" Margin="0,0,0,5"/>
                         </Grid>
-                        <TextBlock Text="將手機圖片拖曳至此處開始轉檔"
+                        <TextBlock Text="將手機圖片或整個資料夾拖曳至此處開始轉檔"
                                    FontSize="17" FontWeight="Bold" Foreground="{StaticResource TextPrimary}" HorizontalAlignment="Center"/>
                         <TextBlock Text="多核心平行處理，支援各廠牌手機照片格式；原始檔案不會被覆寫"
                                    Style="{StaticResource HelperTextStyle}" FontSize="13" HorizontalAlignment="Center" Margin="0,6,0,16"/>
@@ -69,7 +71,7 @@
                                 <TextBlock Text="JPG / JPEG" FontSize="12" FontWeight="Bold" Foreground="{StaticResource TextPrimary}"/>
                             </Border>
                             <Border Style="{StaticResource PillBadgeStyle}" Background="{StaticResource PillLilac}" Margin="0,0,0,6">
-                                <TextBlock Text="PNG / BMP / TIFF" FontSize="12" FontWeight="Bold" Foreground="{StaticResource TextPrimary}"/>
+                                <TextBlock Text="PNG / BMP / TIFF / GIF (單幀)" FontSize="12" FontWeight="Bold" Foreground="{StaticResource TextPrimary}"/>
                             </Border>
                         </WrapPanel>
                     </StackPanel>
@@ -150,12 +152,21 @@
                 </StackPanel>
 
                 <!-- 品質設定 (JPG時有效) -->
-                <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Margin="0,3,20,3">
+                <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Margin="0,3,20,3"
+                            IsEnabled="{Binding TargetFormat, Converter={StaticResource StringEqualsToBoolConverter}, ConverterParameter=JPG}">
                     <TextBlock Text="品質 (JPG)：" Style="{StaticResource FormLabelTextStyle}" VerticalAlignment="Center" Margin="0,0,8,0"/>
-                    <Slider Value="{Binding JpgQuality}" Minimum="10" Maximum="100" Width="110" VerticalAlignment="Center"
+                    <Slider Value="{Binding JpgQuality}" Minimum="10" Maximum="100" Width="105" VerticalAlignment="Center"
                             IsSnapToTickEnabled="True" TickFrequency="1" SmallChange="1" LargeChange="10"/>
                     <TextBlock Text="{Binding JpgQuality, StringFormat={}{0}%}" Foreground="{StaticResource TextPrimary}" FontWeight="Bold" FontFamily="{StaticResource NumberFont}"
                                Width="40" TextAlignment="Right" VerticalAlignment="Center" Margin="4,0,0,0" FontSize="13"/>
+                </StackPanel>
+
+                <!-- 最大尺寸限制 -->
+                <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Margin="0,3,20,3">
+                    <TextBlock Text="尺寸限制：" Style="{StaticResource FormLabelTextStyle}" VerticalAlignment="Center" Margin="0,0,8,0"/>
+                    <ComboBox ItemsSource="{Binding MaxDimensionOptions}" DisplayMemberPath="Label" SelectedValuePath="Value"
+                              SelectedValue="{Binding MaxDimension}" Width="154"
+                              ToolTip="等比例縮放長邊上限（不放大原圖）"/>
                 </StackPanel>
 
                 <!-- Exif 旋轉校正 -->

@@ -17,8 +17,19 @@ public partial class MainWindow : Window
 
     private void MainWindow_PreviewKeyDown(object sender, KeyEventArgs e)
     {
-        // 焦點在文字輸入或下拉選單時保留原生按鍵行為（避免方向鍵改選項時同時拖動影片）
-        if (Keyboard.FocusedElement is TextBox or ComboBox or ComboBoxItem)
+        // 焦點在文字輸入、下拉選單或滑桿時保留原生按鍵行為（避免方向鍵改選項時同時拖動影片）
+        if (Keyboard.FocusedElement is TextBox or ComboBox or ComboBoxItem or Slider)
+        {
+            return;
+        }
+
+        // 焦點在勾選框或按鈕時保留空白鍵 / Enter 原生切換與點擊行為
+        if (Keyboard.FocusedElement is CheckBox && e.Key == Key.Space)
+        {
+            return;
+        }
+
+        if (Keyboard.FocusedElement is Button && e.Key is Key.Space or Key.Return)
         {
             return;
         }
@@ -98,6 +109,10 @@ public partial class MainWindow : Window
     {
         if (ViewImageConverter != null && ViewVideoSnapshot != null)
         {
+            if (ViewModel?.VideoSnapshot.IsPlaying == true)
+            {
+                ViewModel.VideoSnapshot.ExecutePlayPause();
+            }
             ViewImageConverter.Visibility = Visibility.Visible;
             ViewVideoSnapshot.Visibility = Visibility.Collapsed;
         }

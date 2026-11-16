@@ -1,10 +1,11 @@
-[CmdletBinding()]
+﻿[CmdletBinding()]
 param(
     [string]$Configuration = "Release",
     [string]$OutputDir = "dist"
 )
 
 $ErrorActionPreference = 'Stop'
+[Console]::OutputEncoding = [System.Text.Encoding]::UTF8
 $root = Split-Path -Parent $PSScriptRoot
 $projectPath = Join-Path $root "src\PoliceImageToolkit\PoliceImageToolkit.csproj"
 $projectDir = Join-Path $root "src\PoliceImageToolkit"
@@ -17,6 +18,7 @@ if (Test-Path "$env:USERPROFILE\AppData\Local\Microsoft\dotnet\dotnet.exe") {
 } elseif (Get-Command "dotnet" -ErrorAction SilentlyContinue) {
     $dotnet = "dotnet"
 }
+
 # 關閉可能佔用 dist/ 執行檔之既有進程
 Get-Process "PoliceImageToolkit" -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
 Start-Sleep -Milliseconds 500
@@ -67,8 +69,13 @@ $guidePath = Join-Path $destination "GUIDE.txt"
 $versionSrc = Join-Path $projectDir "version.txt"
 $versionDst = Join-Path $destination "version.txt"
 
+$appVersion = "v11.5.0"
 if (Test-Path $versionSrc) {
     Copy-Item -LiteralPath $versionSrc -Destination $versionDst -Force
+    $readVer = (Get-Content -LiteralPath $versionSrc -Encoding UTF8 -Raw).Trim()
+    if (-not [string]::IsNullOrWhiteSpace($readVer)) {
+        $appVersion = $readVer
+    }
 }
 
 # 觸發 Windows Shell 重新整理圖示快取 (SHChangeNotify)
@@ -90,10 +97,10 @@ if (Test-Path $exePath) {
     $item = Get-Item $exePath
     $sizeMb = [math]::Round($item.Length / 1MB, 2)
     $sha256 = (Get-FileHash -LiteralPath $exePath -Algorithm SHA256).Hash.ToLowerInvariant()
-    Set-Content -LiteralPath $hashPath -Value "$sha256 *$($item.Name)" -Encoding utf8
+    [System.IO.File]::WriteAllText($hashPath, "$sha256 *$($item.Name)`r`n", (New-Object System.Text.UTF8Encoding($false)))
 
     $guide = @"
-Police Image Toolkit Portable Edition Guide (v11.4.0)
+Police Image Toolkit Portable Edition Guide ($appVersion)
 ======================================================
 
 1. 支援 Windows 10 / 11 64 位元；不需安裝 .NET Runtime。
@@ -107,11 +114,12 @@ $sha256
 命令列驗證指令：
 Get-FileHash .\PoliceImageToolkit.exe -Algorithm SHA256
 "@
-    Set-Content -LiteralPath $guidePath -Value $guide -Encoding utf8
+    [System.IO.File]::WriteAllText($guidePath, $guide, (New-Object System.Text.UTF8Encoding($true)))
 
     Write-Output ""
     Write-Output "=========================================================="
     Write-Output "SUCCESS: Published single-file executable!"
+    Write-Output "Version: $appVersion"
     Write-Output "Path:    $exePath"
     Write-Output "Size:    $sizeMb MB"
     Write-Output "SHA256:  $sha256"

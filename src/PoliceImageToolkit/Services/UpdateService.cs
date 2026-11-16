@@ -7,6 +7,8 @@ namespace PoliceImageToolkit.Services;
 
 public class UpdateService : IUpdateService
 {
+    public const string FallbackVersion = "v11.5.0";
+
     private static readonly HttpClient _httpClient = new()
     {
         Timeout = TimeSpan.FromSeconds(6)
@@ -54,7 +56,13 @@ public class UpdateService : IUpdateService
             return $"v{ver.Major}.{ver.Minor}.{ver.Build}";
         }
 
-        return "v11.2.0";
+        return FallbackVersion;
+    }
+
+    public static bool IsSafeExternalUrl(string? url)
+    {
+        return Uri.TryCreate(url, UriKind.Absolute, out var uri) &&
+               uri.Scheme == Uri.UriSchemeHttps;
     }
 
     public async Task<UpdateCheckResult> CheckForUpdateAsync(string owner = "lianghao02", string repo = "Police-Image-Toolkit")

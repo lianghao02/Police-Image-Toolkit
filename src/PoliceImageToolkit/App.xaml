@@ -9,6 +9,9 @@
         <local:InverseBoolToVisibilityConverter x:Key="InverseBoolToVisConverter"/>
         <local:CountToVisibilityHiddenConverter x:Key="CountToVisHiddenConverter"/>
         <local:NullToVisibilityConverter x:Key="NullToVisConverter"/>
+        <local:StringEqualsToVisibilityConverter x:Key="StringEqualsToVisConverter"/>
+        <local:StringEqualsToBoolConverter x:Key="StringEqualsToBoolConverter"/>
+        <local:FileNameFromPathConverter x:Key="FileNameFromPathConverter"/>
 
         <!--
             主題色系定義：2D 遊戲 Q 版（警務藍 × 徽章金 × 奶油底）

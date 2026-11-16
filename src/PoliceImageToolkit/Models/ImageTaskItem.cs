@@ -77,19 +77,6 @@ public class ImageTaskItem : ViewModelBase
         set => SetProperty(ref _elapsed, value);
     }
 
-    public string SourceSizeFormatted => FormatBytes(SourceSizeBytes);
-    public string OutputSizeFormatted => OutputSizeBytes > 0 ? FormatBytes(OutputSizeBytes) : "-";
-
-    private static string FormatBytes(long bytes)
-    {
-        string[] suffixes = ["B", "KB", "MB", "GB"];
-        int order = 0;
-        double len = bytes;
-        while (len >= 1024 && order < suffixes.Length - 1)
-        {
-            order++;
-            len /= 1024;
-        }
-        return $"{len:0.##} {suffixes[order]}";
-    }
+    public string SourceSizeFormatted => ByteSizeFormatter.Format(SourceSizeBytes);
+    public string OutputSizeFormatted => OutputSizeBytes > 0 ? ByteSizeFormatter.Format(OutputSizeBytes) : "-";
 }

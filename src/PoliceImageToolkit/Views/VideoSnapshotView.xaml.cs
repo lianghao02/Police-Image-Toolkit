@@ -16,13 +16,33 @@ public partial class VideoSnapshotView : UserControl
     private const double WideWorkspaceMinWidth = 1100;
     // 窄版上下堆疊時右側的最低總高度；視窗較矮時改由外層 ScrollViewer 捲動，避免清單被擠到看不見。
     private const double StackedWorkspaceMinHeight = 700;
+
     private readonly DispatcherTimer _timer;
+    private readonly MediaPlayer _mediaPlayer;
+    private readonly VideoDrawing _videoDrawing;
+    private readonly DrawingImage _playerImage;
     private bool _isUserDraggingSlider = false;
     private bool? _isWideWorkspace;
 
     public VideoSnapshotView()
     {
         InitializeComponent();
+
+        _mediaPlayer = new MediaPlayer
+        {
+            ScrubbingEnabled = true
+        };
+        _mediaPlayer.MediaOpened += MediaPlayer_MediaOpened;
+        _mediaPlayer.MediaEnded += MediaPlayer_MediaEnded;
+        _mediaPlayer.MediaFailed += MediaPlayer_MediaFailed;
+
+        _videoDrawing = new VideoDrawing
+        {
+            Player = _mediaPlayer,
+            Rect = new Rect(0, 0, 1, 1)
+        };
+        _playerImage = new DrawingImage(_videoDrawing);
+        PlayerDisplay.Source = _playerImage;
 
         _timer = new DispatcherTimer
         {
@@ -38,6 +58,13 @@ public partial class VideoSnapshotView : UserControl
     private void UserControl_Loaded(object sender, RoutedEventArgs e)
     {
         UpdateRightWorkspaceLayout();
+    }
+
+    private void UserControl_Unloaded(object sender, RoutedEventArgs e)
+    {
+        _timer.Stop();
+        _mediaPlayer.Stop();
+        _mediaPlayer.Close();
     }
 
     private void UserControl_SizeChanged(object sender, SizeChangedEventArgs e)
@@ -150,7 +177,7 @@ public partial class VideoSnapshotView : UserControl
 
             if (!string.IsNullOrEmpty(newVm.VideoPath) && File.Exists(newVm.VideoPath))
             {
-                Player.Source = new Uri(newVm.VideoPath);
+                Vm_RequestLoadVideo(newVm.VideoPath);
             }
         }
     }
@@ -159,16 +186,16 @@ public partial class VideoSnapshotView : UserControl
     {
         _timer.Stop();
         BtnPlayPause.Content = "▶ 播放";
-        Player.Stop();
-        Player.Source = new Uri(path);
-        // MediaElement 為 Manual 模式，需 Play 後才會開啟媒體；MediaOpened 會再暫停於第一格。
-        Player.Play();
-        Player.Pause();
+        _mediaPlayer.Stop();
+        _mediaPlayer.Open(new Uri(path));
+        // 預先啟動媒體管線解碼首幀；MediaOpened 會立即暫停於第 0 秒並通知 ViewModel。
+        _mediaPlayer.Play();
+        _mediaPlayer.Pause();
     }
 
     private void Vm_RequestPlay()
     {
-        Player.Play();
+        _mediaPlayer.Play();
         _timer.Start();
         if (ViewModel != null) ViewModel.IsPlaying = true;
         BtnPlayPause.Content = "⏸ 暫停";
@@ -176,7 +203,7 @@ public partial class VideoSnapshotView : UserControl
 
     private void Vm_RequestPause()
     {
-        Player.Pause();
+        _mediaPlayer.Pause();
         _timer.Stop();
         if (ViewModel != null) ViewModel.IsPlaying = false;
         BtnPlayPause.Content = "▶ 播放";
@@ -184,7 +211,7 @@ public partial class VideoSnapshotView : UserControl
 
     private void Vm_RequestSeek(TimeSpan position)
     {
-        Player.Position = position;
+        _mediaPlayer.Position = position;
         if (ViewModel != null)
         {
             ViewModel.CurrentPosition = position;
@@ -195,31 +222,22 @@ public partial class VideoSnapshotView : UserControl
     {
         try
         {
-            int naturalWidth = Player.NaturalVideoWidth;
-            int naturalHeight = Player.NaturalVideoHeight;
+            int naturalWidth = _mediaPlayer.NaturalVideoWidth;
+            int naturalHeight = _mediaPlayer.NaturalVideoHeight;
 
-            if (naturalWidth <= 0 || naturalHeight <= 0)
+            if (!_mediaPlayer.HasVideo || naturalWidth <= 0 || naturalHeight <= 0)
             {
-                naturalWidth = (int)Player.ActualWidth;
-                naturalHeight = (int)Player.ActualHeight;
+                return null;
             }
 
-            if (naturalWidth <= 0 || naturalHeight <= 0)
-            {
-                naturalWidth = 1080;
-                naturalHeight = 1920;
-            }
-
-            // 捕捉當前 MediaElement 渲染之視覺內容
-            var renderTarget = new RenderTargetBitmap(naturalWidth, naturalHeight, 96, 96, PixelFormats.Pbgra32);
-            var visualBrush = new VisualBrush(Player) { Stretch = Stretch.Uniform };
-
+            // 直接以視訊軌原始像素寬高繪製，完全不受預覽手機外框縮放或黑邊影響。
             var drawingVisual = new DrawingVisual();
             using (var dc = drawingVisual.RenderOpen())
             {
-                dc.DrawRectangle(visualBrush, null, new Rect(0, 0, naturalWidth, naturalHeight));
+                dc.DrawVideo(_mediaPlayer, new Rect(0, 0, naturalWidth, naturalHeight));
             }
 
+            var renderTarget = new RenderTargetBitmap(naturalWidth, naturalHeight, 96, 96, PixelFormats.Pbgra32);
             renderTarget.Render(drawingVisual);
             renderTarget.Freeze();
             return renderTarget;
@@ -245,32 +263,44 @@ public partial class VideoSnapshotView : UserControl
 
     private void Timer_Tick(object? sender, EventArgs e)
     {
-        if (!_isUserDraggingSlider && ViewModel != null && Player.NaturalDuration.HasTimeSpan)
+        if (!_isUserDraggingSlider && ViewModel != null && _mediaPlayer.NaturalDuration.HasTimeSpan)
         {
-            ViewModel.CurrentPosition = Player.Position;
+            ViewModel.CurrentPosition = _mediaPlayer.Position;
         }
     }
 
-    private void Player_MediaOpened(object sender, RoutedEventArgs e)
+    private void MediaPlayer_MediaOpened(object? sender, EventArgs e)
     {
-        if (ViewModel != null && Player.NaturalDuration.HasTimeSpan)
+        if (ViewModel == null) return;
+
+        int naturalWidth = _mediaPlayer.NaturalVideoWidth;
+        int naturalHeight = _mediaPlayer.NaturalVideoHeight;
+        if (!_mediaPlayer.HasVideo || naturalWidth <= 0 || naturalHeight <= 0)
         {
-            ViewModel.Duration = Player.NaturalDuration.TimeSpan;
-            ViewModel.CurrentPosition = TimeSpan.Zero;
-            Player.Position = TimeSpan.Zero;
-            Player.Pause(); // 預設載入後暫停於第一格
+            _mediaPlayer.Close();
+            ViewModel.MarkVideoLoadFailed("檔案未包含可顯示的視訊軌");
+            return;
         }
+
+        _videoDrawing.Rect = new Rect(0, 0, naturalWidth, naturalHeight);
+        _mediaPlayer.Position = TimeSpan.Zero;
+        _mediaPlayer.Pause();
+
+        TimeSpan duration = _mediaPlayer.NaturalDuration.HasTimeSpan
+            ? _mediaPlayer.NaturalDuration.TimeSpan
+            : TimeSpan.Zero;
+        ViewModel.MarkVideoOpened(duration);
     }
 
-    private void Player_MediaFailed(object? sender, ExceptionRoutedEventArgs e)
+    private void MediaPlayer_MediaFailed(object? sender, ExceptionEventArgs e)
     {
         _timer.Stop();
         BtnPlayPause.Content = "▶ 播放";
-        Player.Source = null;
+        _mediaPlayer.Close();
         ViewModel?.MarkVideoLoadFailed(e.ErrorException?.Message ?? "系統缺少對應解碼器");
     }
 
-    private void Player_MediaEnded(object sender, RoutedEventArgs e)
+    private void MediaPlayer_MediaEnded(object? sender, EventArgs e)
     {
         Vm_RequestPause();
         if (ViewModel != null)
@@ -289,7 +319,7 @@ public partial class VideoSnapshotView : UserControl
         _isUserDraggingSlider = false;
         if (ViewModel != null)
         {
-            Player.Position = ViewModel.CurrentPosition;
+            _mediaPlayer.Position = ViewModel.CurrentPosition;
         }
     }
 
