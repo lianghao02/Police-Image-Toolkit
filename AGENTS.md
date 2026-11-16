@@ -5,9 +5,9 @@
 ---
 
 ## 1. 技術棧與建置規範
-- **主力架構**：C# 12 / .NET 8.0 WPF，保持原生秒開、獨立單檔發布（`PublishSingleFile=true`）與零環境依賴。
+- **主力架構**：C# 12 / .NET 8.0 WPF，採 MVVM 架構並保持原生秒開、獨立單檔發布（`PublishSingleFile=true`）與零環境依賴；修改 XAML 時注意 `<Resources>` 必須宣告於使用處之前。
 - **.NET SDK 本機環境**：`.NET 8.0.406 SDK` 位於 `%LOCALAPPDATA%\Microsoft\dotnet`。CLI 建置與測試需確保 `DOTNET_ROOT` 正確設定。
-- **測試方式（重要）**：核心測試是自訂主控台程式（`tests/PoliceImageToolkit.CoreTests`，`OutputType=Exe`），**不是 xUnit**。`dotnet test` 會直接結束碼 0 卻一個測試都不執行，**不可當作通過證據**。請用 `scripts/test.ps1`（或 `dotnet run --project tests/PoliceImageToolkit.CoreTests`），並確認輸出「完成：N/N 項測試通過」；交付前用 `scripts/qa.ps1`。
+- **測試方式（重要）**：核心測試是自訂主控台程式（`tests/PoliceImageToolkit.CoreTests`，`OutputType=Exe`），**不是 xUnit**。`dotnet test` 會直接結束碼 0 卻一個測試都不執行，**不可當作通過證據**。請用 `scripts/test.ps1`（或 `dotnet run --project tests/PoliceImageToolkit.CoreTests`），並確認輸出「完成：N/N 項測試通過」；建置用 `scripts/build.ps1`，交付前用 `scripts/qa.ps1`。
 - **發布標準**：維持 `dist/PoliceImageToolkit.exe` 單檔發布與 `SHA256SUMS.txt` 雜湊驗證。
 
 ---
@@ -30,20 +30,8 @@
 ---
 
 ## 4. 核心驗證方式
-- 修改 Core 演算法、影像轉換或截圖模組後，必須執行單元測試：
+- 修改 Core 演算法、影像轉換或截圖模組後，必須執行單元測試與交付檢核：
   ```powershell
   powershell -NoProfile -ExecutionPolicy Bypass -File scripts\test.ps1
+  powershell -NoProfile -ExecutionPolicy Bypass -File scripts\qa.ps1
   ```
-
----
-
-## 5. 共用 Skill 引用與動態解析 (Discovery Rule)
-- 本專案遵循 LiangHao 全生態系標準規範 Skill：`lianghao-development`（Canonical Source 位於 `Dev-Control-Center/configs/skills/lianghao-development`，v1.0.0）。
-- Agent 開始工作時：
-  1. 優先使用目前環境可自動發現的 `lianghao-development` Skill
-  2. 若平台未自動載入，使用既有動態解析順序：環境變數 `LIANGHAO_SKILL_HOME` ➜ `%USERPROFILE%\.lianghao\config.json` ➜ 鄰近工作區探索 `..\00_Dev-Control-Center\configs\skills\lianghao-development` 或呼叫其 `skill-resolver.ps1`
-  3. 先讀 Shared Skill
-  4. 再讀本專案 `AGENTS.md`
-  5. 再讀目前 `HANDOFF.md` / `IMPLEMENTATION_PLAN.md`
-  6. 專案、Git、測試與建置實際狀態優先於文件歷史
-- 跨 Agent HANDOFF 一律使用 `lianghao-development` 標準範本，以 `Repository Full Name`、`Branch`、`Commit SHA`、`Task Type` 為主要識別，嚴禁複製 Skill 到本專案。
