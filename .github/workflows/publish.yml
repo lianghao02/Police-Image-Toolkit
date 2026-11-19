@@ -1,0 +1,51 @@
+name: Publish Windows release
+on:
+  push:
+    branches:
+      - 'release/v*'
+permissions:
+  contents: read
+jobs:
+  publish:
+    runs-on: windows-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+      - name: Verify release branch matches source version
+        shell: pwsh
+        run: |
+          $version = (Get-Content src/PoliceImageToolkit/version.txt -Raw).Trim()
+          if ($env:GITHUB_REF_NAME -ne "release/$version") {
+            throw 'Release branch does not match the source version.'
+          }
+      - name: Run repository QA and actual Windows tests
+        shell: pwsh
+        run: ./scripts/qa.ps1
+      - name: Build self-contained Windows executable
+        shell: pwsh
+        run: ./scripts/build.ps1
+      - name: Package, verify hashes and publish release
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $version = (Get-Content src/PoliceImageToolkit/version.txt -Raw).Trim()
+          $exe = Join-Path $PWD 'dist/PoliceImageToolkit.exe'
+          $zip = Join-Path $PWD "dist/PoliceImageToolkit-$version-win-x64.zip"
+          $sums = Join-Path $PWD "dist/PoliceImageToolkit-$version-SHA256SUMS.txt"
+          $files = @($exe, (Join-Path $PWD 'dist/version.txt'), (Join-Path $PWD 'dist/GUIDE.txt'), (Join-Path $PWD 'dist/SHA256SUMS.txt'))
+          Compress-Archive -LiteralPath $files -DestinationPath $zip
+          $lines = foreach ($file in @($exe, $zip)) {
+            $hash = (Get-FileHash -LiteralPath $file -Algorithm SHA256).Hash.ToLowerInvariant()
+            "$hash *$(Split-Path -Leaf $file)"
+          }
+          [IO.File]::WriteAllText($sums, ($lines -join "`n") + "`n", [Text.UTF8Encoding]::new($false))
+          gh release create $version $exe $zip $sums --draft --target $env:GITHUB_SHA --title "Police Image Toolkit $version" --notes-file docs/RELEASE_NOTES.md
+          if ($LASTEXITCODE -ne 0) { throw 'Creating the draft release and uploading assets failed.' }
+          gh release edit $version --draft=false --latest
+          if ($LASTEXITCODE -ne 0) { throw 'Publishing the verified release failed.' }
