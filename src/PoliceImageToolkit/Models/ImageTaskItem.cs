@@ -1,3 +1,4 @@
+using System.Windows.Media.Imaging;
 using PoliceImageToolkit.ViewModels;
 
 namespace PoliceImageToolkit.Models;
@@ -20,6 +21,7 @@ public class ImageTaskItem : ViewModelBase
     private int _outputWidth;
     private int _outputHeight;
     private TimeSpan _elapsed = TimeSpan.Zero;
+    private BitmapSource? _thumbnail;
 
     public required string FilePath { get; init; }
     public required string FileName { get; init; }
@@ -75,6 +77,12 @@ public class ImageTaskItem : ViewModelBase
     {
         get => _elapsed;
         set => SetProperty(ref _elapsed, value);
+    }
+
+    public BitmapSource? Thumbnail
+    {
+        get => _thumbnail;
+        set => SetProperty(ref _thumbnail, value);
     }
 
     public string SourceSizeFormatted => ByteSizeFormatter.Format(SourceSizeBytes);

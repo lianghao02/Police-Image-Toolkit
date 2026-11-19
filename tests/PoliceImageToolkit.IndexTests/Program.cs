@@ -37,6 +37,7 @@ static async Task RoundTrip(string dir)
     var service = new OutputIndexService();
     await service.AppendEntriesAsync(dir, [Entry("001.png") with { SourceFile = Path.Combine(dir, "private", "source.mp4") }]);
     await service.AppendEntriesAsync(dir, [Entry("001.png"), Entry("002.png")]);
+    Check(!File.Exists(Path.Combine(dir, ".report_index.lock")), "輸出資料夾不應產生 .report_index.lock");
     string path = Path.Combine(dir, "report_index.json");
     string json = File.ReadAllText(path);
     Check(!json.Contains("private"), "不應持久化絕對路徑");
@@ -85,7 +86,9 @@ static async Task CancelLock(string dir)
 {
     var service = new OutputIndexService(); await service.AppendEntriesAsync(dir, [Entry("original.png")]);
     string path = Path.Combine(dir, "report_index.json"), before = File.ReadAllText(path);
-    using var held = new FileStream(Path.Combine(dir, ".report_index.lock"), FileMode.OpenOrCreate, FileAccess.ReadWrite, FileShare.None);
+    string lockPath = OutputIndexService.GetLockFilePath(dir);
+    Directory.CreateDirectory(Path.GetDirectoryName(lockPath)!);
+    using var held = new FileStream(lockPath, FileMode.OpenOrCreate, FileAccess.ReadWrite, FileShare.None);
     using var cancel = new CancellationTokenSource(150);
     bool cancelled = false;
     try { await service.AppendEntriesAsync(dir, [Entry("new.png")], cancel.Token); }

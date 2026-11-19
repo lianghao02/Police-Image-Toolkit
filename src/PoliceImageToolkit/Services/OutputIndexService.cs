@@ -1,5 +1,6 @@
 using System.Collections.Concurrent;
 using System.IO;
+using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using PoliceImageToolkit.Models;
@@ -56,6 +57,20 @@ public sealed class OutputIndexService : IOutputIndexService
         }, cancellationToken);
     }
 
+    public static string GetLockFilePath(string outputDirectory)
+    {
+        string normalized = Path.TrimEndingDirectorySeparator(Path.GetFullPath(outputDirectory));
+        if (OperatingSystem.IsWindows())
+        {
+            normalized = normalized.ToUpperInvariant();
+        }
+
+        string hash = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(normalized)));
+        string appData = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
+        string baseDir = string.IsNullOrWhiteSpace(appData) ? Path.GetTempPath() : appData;
+        return Path.Combine(baseDir, "PoliceImageToolkit", "locks", $"{hash}.lock");
+    }
+
     private static bool IsValidEntry(OutputIndexEntry entry) =>
         !string.IsNullOrWhiteSpace(entry.OutputFile) &&
         !string.IsNullOrWhiteSpace(entry.SourceFile) &&
@@ -75,9 +90,10 @@ public sealed class OutputIndexService : IOutputIndexService
         {
             Directory.CreateDirectory(fullDirectory);
             string indexPath = Path.Combine(fullDirectory, IndexFileName);
-            // 鎖檔保留在資料夾中，不刪除，避免另一程序鎖住已刪除檔案的競態。
-            using var processLock = await AcquireProcessLockAsync(
-                Path.Combine(fullDirectory, ".report_index.lock"), cancellationToken);
+            string lockPath = GetLockFilePath(fullDirectory);
+            Directory.CreateDirectory(Path.GetDirectoryName(lockPath)!);
+            // 鎖檔集中置於本機設定暫存目錄，避免在輸出資料夾留下技術性 .lock 檔案。
+            using var processLock = await AcquireProcessLockAsync(lockPath, cancellationToken);
             var document = await ReadDocumentAsync(indexPath, cancellationToken);
             update(document);
             document.Schema = SchemaName;

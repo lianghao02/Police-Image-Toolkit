@@ -2,6 +2,7 @@ using System.Collections.ObjectModel;
 using System.Diagnostics;
 using System.IO;
 using System.Windows.Input;
+using System.Windows.Media.Imaging;
 using Microsoft.Win32;
 using PoliceImageToolkit.Models;
 using PoliceImageToolkit.Services;
@@ -60,6 +61,7 @@ public class ImageConverterViewModel : ViewModelBase
         }
 
         AddFilesCommand = new RelayCommand(_ => ExecuteAddFiles(), _ => !IsProcessing);
+        AddFolderCommand = new RelayCommand(_ => ExecuteAddFolder(), _ => !IsProcessing);
         RemoveSelectedCommand = new RelayCommand(ExecuteRemoveSelected, _ => !IsProcessing);
         ClearAllCommand = new RelayCommand(_ => ExecuteClearAll(), _ => !IsProcessing && Tasks.Count > 0);
         ResetStatusCommand = new RelayCommand(_ => ResetTasksForReconvert(), _ => !IsProcessing && Tasks.Any(t => t.Status != TaskStatus.Pending));
@@ -71,7 +73,7 @@ public class ImageConverterViewModel : ViewModelBase
             if (result != System.Windows.MessageBoxResult.Yes) return;
             ResetTasksForReconvert();
             await StartConvertAsync();
-        }, _ => !IsProcessing && Tasks.Any(t => t.Status == TaskStatus.Success));
+        }, _ => !IsProcessing && Tasks.Any(t => t.Status is TaskStatus.Success or TaskStatus.Failed));
         RetryIndexCommand = new RelayCommand(async _ =>
         {
             if (IsProcessing) return;
@@ -91,7 +93,7 @@ public class ImageConverterViewModel : ViewModelBase
 
     public MaxDimensionOption[] MaxDimensionOptions { get; } =
     [
-        new("原尺寸 (不縮放)", 0),
+        new("原尺寸（不縮放）", 0),
         new("長邊上限 2560 px", 2560),
         new("長邊上限 1920 px", 1920),
         new("長邊上限 1280 px", 1280),
@@ -165,8 +167,8 @@ public class ImageConverterViewModel : ViewModelBase
     }
 
     public string OutputDirectoryHint => UseCustomOutputDirectory && !string.IsNullOrWhiteSpace(OutputDirectory)
-        ? $"輸出位置：{OutputDirectory}"
-        : "輸出位置：各來源圖片所在資料夾下的 Converted 子資料夾（不覆寫原檔）";
+        ? $"儲存位置：{OutputDirectory}"
+        : "儲存位置：各來源圖片所在資料夾下的 Converted 子資料夾（不覆寫原檔）";
 
     public bool IsProcessing
     {
@@ -193,11 +195,24 @@ public class ImageConverterViewModel : ViewModelBase
         set => SetProperty(ref _summaryText, value);
     }
 
-    public string IndexMessage { get => _indexMessage; private set => SetProperty(ref _indexMessage, value); }
+    public string IndexMessage
+    {
+        get => _indexMessage;
+        private set
+        {
+            if (SetProperty(ref _indexMessage, value))
+            {
+                OnPropertyChanged(nameof(HasPendingIndexWork));
+            }
+        }
+    }
+
+    public bool HasPendingIndexWork => _pendingIndexEntries.Count > 0 || IndexMessage.Contains("失敗", StringComparison.Ordinal);
     public bool CanEditSettings => !IsProcessing;
     public ICommand ReconvertCommand { get; }
     public ICommand RetryIndexCommand { get; }
     public ICommand AddFilesCommand { get; }
+    public ICommand AddFolderCommand { get; }
     public ICommand RemoveSelectedCommand { get; }
     public ICommand ClearAllCommand { get; }
     public ICommand ResetStatusCommand { get; }
@@ -210,7 +225,7 @@ public class ImageConverterViewModel : ViewModelBase
     {
         if (IsProcessing) return 0;
         var existingPaths = Tasks.Select(t => t.FilePath).ToHashSet(StringComparer.OrdinalIgnoreCase);
-        int added = 0;
+        var addedItems = new List<ImageTaskItem>();
 
         foreach (string candidate in ExpandPaths(inputPaths))
         {
@@ -221,18 +236,51 @@ public class ImageConverterViewModel : ViewModelBase
             if (!existingPaths.Add(candidate)) continue;
 
             var fi = new FileInfo(candidate);
-            Tasks.Add(new ImageTaskItem
+            var item = new ImageTaskItem
             {
                 FilePath = candidate,
                 FileName = fi.Name,
                 SourceFormat = ext.TrimStart('.').ToUpperInvariant(),
                 SourceSizeBytes = fi.Length
-            });
-            added++;
+            };
+            Tasks.Add(item);
+            addedItems.Add(item);
+        }
+
+        if (addedItems.Count > 0)
+        {
+            _ = LoadThumbnailsAsync(addedItems);
         }
 
         UpdateSummary();
-        return added;
+        return addedItems.Count;
+    }
+
+    private async Task LoadThumbnailsAsync(IReadOnlyList<ImageTaskItem> items)
+    {
+        await Task.Run(() =>
+        {
+            foreach (var item in items)
+            {
+                try
+                {
+                    if (!File.Exists(item.FilePath)) continue;
+                    using var fs = new FileStream(item.FilePath, FileMode.Open, FileAccess.Read, FileShare.Read);
+                    var bitmap = new BitmapImage();
+                    bitmap.BeginInit();
+                    bitmap.CacheOption = BitmapCacheOption.OnLoad;
+                    bitmap.DecodePixelWidth = 88;
+                    bitmap.StreamSource = fs;
+                    bitmap.EndInit();
+                    bitmap.Freeze();
+                    RunOnUIThread(() => item.Thumbnail = bitmap);
+                }
+                catch
+                {
+                    // 無縮圖不阻斷轉檔任務（例如缺少系統解碼器之格式）
+                }
+            }
+        });
     }
 
     private static IEnumerable<string> ExpandPaths(IEnumerable<string> inputPaths)
@@ -283,6 +331,23 @@ public class ImageConverterViewModel : ViewModelBase
         if (dialog.ShowDialog() == true)
         {
             AddFiles(dialog.FileNames);
+        }
+    }
+
+    private void ExecuteAddFolder()
+    {
+        var dialog = new OpenFolderDialog
+        {
+            Title = "選擇要批次加入的圖片資料夾（含子資料夾）"
+        };
+
+        if (dialog.ShowDialog() == true)
+        {
+            int added = AddFiles([dialog.FolderName]);
+            if (added == 0)
+            {
+                SummaryText = "所選資料夾內沒有找到支援的圖片格式。";
+            }
         }
     }
 
@@ -356,7 +421,7 @@ public class ImageConverterViewModel : ViewModelBase
         int total = pendingTasks.Count;
         int completed = 0;
         OverallProgress = 0;
-        SummaryText = $"正在批次轉檔中 (0 / {total})...";
+        SummaryText = $"正在批次轉檔（0 / {total}）…";
 
         var sw = Stopwatch.StartNew();
 
@@ -388,13 +453,13 @@ public class ImageConverterViewModel : ViewModelBase
                 RunOnUIThread(() =>
                 {
                     OverallProgress = pct;
-                    SummaryText = $"正在批次轉檔中 ({done} / {total}) - {pct:0}%";
+                    SummaryText = $"正在批次轉檔（{done} / {total}）－{pct:0}%";
                 });
             });
 
             sw.Stop();
             int successCount = pendingTasks.Count(t => t.Status == TaskStatus.Success);
-            SummaryText = $"轉檔完成！成功: {successCount} 筆，失敗: {total - successCount} 筆 (總耗時: {sw.Elapsed.TotalSeconds:0.##} 秒)";
+            SummaryText = $"轉檔完成！成功：{successCount} 筆，失敗：{total - successCount} 筆（總耗時：{sw.Elapsed.TotalSeconds:0.##} 秒）";
         }
         catch (OperationCanceledException)
         {
@@ -492,7 +557,7 @@ public class ImageConverterViewModel : ViewModelBase
         else
         {
             long totalBytes = Tasks.Sum(t => t.SourceSizeBytes);
-            SummaryText = $"已載入 {Tasks.Count} 張圖片 (合計 {ByteSizeFormatter.Format(totalBytes)})";
+            SummaryText = $"已載入 {Tasks.Count} 張圖片（合計 {ByteSizeFormatter.Format(totalBytes)}）";
         }
 
         CommandManager.InvalidateRequerySuggested();

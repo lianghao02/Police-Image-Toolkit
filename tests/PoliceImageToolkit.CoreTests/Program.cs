@@ -26,6 +26,10 @@ var tests = new (string Name, Action Execute)[]
     ("圖片轉檔拒絕動畫 GIF 與不支援之目標格式", ImageConversion_RejectsAnimatedGifAndUnsupportedTargetFormat),
     ("圖片轉檔 ViewModel 支援資料夾遞迴展開、去重與重設重轉", ImageConverterViewModel_ExpandsFoldersDeduplicatesAndResetsTasks),
     ("影片截圖於載入前鎖定操作並支援安全移除", VideoSnapshotViewModel_LocksCaptureUntilMediaOpenedAndSupportsUndo),
+    ("影片截圖支援 0.5 秒步進與未載入滑桿邊界歸零", VideoSnapshotViewModel_SupportsHalfSecondStepAndSliderBounds),
+    ("影片截圖支援單張移除、對照檢視切換與頂底部對照條生成", VideoSnapshotViewModel_SupportsSingleItemRemovalAndComparisonInspection),
+    ("截圖流水號不補空號且還原依時間序插回不蓋過最新對照", VideoSnapshot_DoesNotReuseDeletedSequenceAndRestoresInOrder),
+    ("影片倍速切換與最後分頁偏好設定讀寫", VideoSnapshotViewModel_CyclesPlaybackSpeedAndSavesTabPreference),
     ("更新服務可正確比對版本並只允許 HTTPS 下載網址", UpdateService_ComparesSemanticVersionsAndValidatesHttpsUrls),
     ("偏好設定服務可正常讀寫並在設定損毀時退回預設值", UserSettingsService_RoundTripsAndHandlesCorruptedFile)
 };
@@ -684,6 +688,166 @@ static void ImageConversion_RejectsMultipageTiff()
         var item = CreateImageTask(path);
         new ImageService().ConvertAsync(item, new ImageConvertOptions("PNG", 90, Path.Combine(dir, "out"), true, 0)).GetAwaiter().GetResult();
         AssertTrue(item.Status == PoliceImageToolkit.Models.TaskStatus.Failed && string.IsNullOrEmpty(item.OutputPath), "多頁 TIFF 必須明確拒絕且不產生不完整輸出");
+    }
+    finally { CleanupTempDir(dir); }
+}
+
+static void VideoSnapshotViewModel_SupportsHalfSecondStepAndSliderBounds()
+{
+    string dir = CreateTempDir(); Directory.CreateDirectory(dir);
+    try
+    {
+        string videoPath = Path.Combine(dir, "clip.mp4");
+        File.WriteAllText(videoPath, "video");
+        var vm = new VideoSnapshotViewModel(new VideoService(), new RecordingIndexService());
+
+        AssertEqual(1.0, vm.SliderMaximum, "未載入影片時 SliderMaximum 應為 1.0 避免滿條");
+        AssertEqual(0.0, vm.CurrentPositionSeconds, "未載入影片時滑桿位置應歸零");
+        AssertTrue(!vm.StepForwardHalfCommand.CanExecute(null) && !vm.StepBackwardHalfCommand.CanExecute(null), "未載入影片時 0.5 秒步進應停用");
+
+        var seeked = new List<TimeSpan>();
+        vm.RequestSeek += ts =>
+        {
+            seeked.Add(ts);
+            vm.CurrentPosition = ts;
+        };
+
+        vm.LoadVideo(videoPath);
+        vm.MarkVideoOpened(TimeSpan.FromSeconds(1.2));
+        AssertEqual(1.2, vm.SliderMaximum, "載入影片後 SliderMaximum 應等於片長");
+
+        vm.StepForwardHalfCommand.Execute(null);
+        AssertEqual(0.5, vm.CurrentPosition.TotalSeconds, "+0.5 秒步進位置");
+
+        vm.StepForwardHalfCommand.Execute(null);
+        vm.StepForwardHalfCommand.Execute(null);
+        AssertEqual(1.2, vm.CurrentPosition.TotalSeconds, "+0.5 秒超出片尾應限制於片長");
+
+        vm.StepBackwardHalfCommand.Execute(null);
+        AssertTrue(Math.Abs(vm.CurrentPosition.TotalSeconds - 0.7) < 0.001, "-0.5 秒步進位置");
+
+        vm.StepBackwardHalfCommand.Execute(null);
+        vm.StepBackwardHalfCommand.Execute(null);
+        AssertEqual(0.0, vm.CurrentPosition.TotalSeconds, "-0.5 秒超出片頭應限制於 0 秒");
+    }
+    finally { CleanupTempDir(dir); }
+}
+
+static void VideoSnapshotViewModel_SupportsSingleItemRemovalAndComparisonInspection()
+{
+    string dir = CreateTempDir(); Directory.CreateDirectory(dir);
+    try
+    {
+        string videoPath = Path.Combine(dir, "chat.mp4");
+        File.WriteAllText(videoPath, "video");
+        var index = new RecordingIndexService();
+        var vm = new VideoSnapshotViewModel(new VideoService(), index) { OutputDirectory = dir };
+        vm.RequestCurrentFrame += () => CreateTestBitmap(360, 600);
+        vm.LoadVideo(videoPath);
+        vm.MarkVideoOpened(TimeSpan.FromSeconds(10));
+
+        var first = vm.CaptureSnapshotAsync().GetAwaiter().GetResult()!;
+        var second = vm.CaptureSnapshotAsync().GetAwaiter().GetResult()!;
+        var third = vm.CaptureSnapshotAsync().GetAwaiter().GetResult()!;
+
+        AssertTrue(first.TopStrip == null && first.BottomStrip == null, "清單項目不常駐大型 Strip 位元圖以節省記憶體");
+        var topStrip = VideoService.CreateComparisonStrip(CreateTestBitmap(360, 600), top: true);
+        var bottomStrip = VideoService.CreateComparisonStrip(CreateTestBitmap(360, 600), top: false);
+        AssertEqual(200, topStrip.PixelHeight, "頂部對照條應為高度 1/3");
+        AssertEqual(200, bottomStrip.PixelHeight, "底部對照條應為高度 1/3");
+
+        vm.SelectedSnapshot = first;
+        AssertTrue(vm.IsInspectingSelectedSnapshot && vm.ActiveComparisonSnapshot == first, "選取清單項目應切換預覽目標");
+        AssertTrue(vm.LastCapturedSnapshot == third, "選取檢視不應覆寫最新截圖參照");
+
+        vm.ComparisonViewMode = "Full";
+        AssertEqual(600, vm.ActiveComparisonImage!.PixelHeight, "整張模式應載入原高預覽");
+        vm.ComparisonViewMode = "Top";
+        AssertEqual(200, vm.ActiveComparisonImage!.PixelHeight, "頂部模式應按需裁切頂部 1/3");
+        vm.ComparisonViewMode = "Bottom";
+        AssertEqual(200, vm.ActiveComparisonImage!.PixelHeight, "底部模式應按需裁切底部 1/3");
+
+        vm.RemoveSingleSnapshotCommand.Execute(second);
+        AssertEqual(2, vm.Snapshots.Count, "單張移除應精準移除指定項目");
+        AssertTrue(!File.Exists(second.FilePath) && File.Exists(first.FilePath) && File.Exists(third.FilePath), "單張移除不可影響其他截圖");
+        AssertTrue(vm.RestoreLastRemovedCommand.CanExecute(null), "單張移除後應可還原");
+
+        vm.RestoreLastRemovedAsync().GetAwaiter().GetResult();
+        AssertTrue(File.Exists(second.FilePath) && vm.Snapshots.Count == 3, "單張移除項目應能正常還原");
+    }
+    finally { CleanupTempDir(dir); }
+}
+
+static void VideoSnapshot_DoesNotReuseDeletedSequenceAndRestoresInOrder()
+{
+    string dir = CreateTempDir(); Directory.CreateDirectory(dir);
+    try
+    {
+        string videoPath = Path.Combine(dir, "seq.mp4");
+        File.WriteAllText(videoPath, "video");
+        var vm = new VideoSnapshotViewModel(new VideoService(), new RecordingIndexService()) { OutputDirectory = dir };
+        vm.RequestCurrentFrame += () => CreateTestBitmap(160, 300);
+        TimeSpan mockPos = TimeSpan.FromSeconds(1);
+        vm.RequestCurrentPosition += () => mockPos;
+
+        vm.LoadVideo(videoPath);
+        vm.MarkVideoOpened(TimeSpan.FromSeconds(20));
+
+        mockPos = TimeSpan.FromSeconds(1);
+        var s1 = vm.CaptureSnapshotAsync().GetAwaiter().GetResult()!;
+        mockPos = TimeSpan.FromSeconds(3);
+        var s2 = vm.CaptureSnapshotAsync().GetAwaiter().GetResult()!;
+        mockPos = TimeSpan.FromSeconds(5);
+        var s3 = vm.CaptureSnapshotAsync().GetAwaiter().GetResult()!;
+
+        AssertEqual("001.png", Path.GetFileName(s1.FilePath), "第 1 張檔名");
+        AssertEqual("002.png", Path.GetFileName(s2.FilePath), "第 2 張檔名");
+        AssertEqual("003.png", Path.GetFileName(s3.FilePath), "第 3 張檔名");
+
+        vm.RemoveSingleSnapshotCommand.Execute(s2);
+        AssertTrue(!File.Exists(s2.FilePath) && vm.HasRecoveryFiles, "移除後應移入暫存回收區");
+
+        mockPos = TimeSpan.FromSeconds(7);
+        var s4 = vm.CaptureSnapshotAsync().GetAwaiter().GetResult()!;
+        AssertEqual("004.png", Path.GetFileName(s4.FilePath), "新截圖不得補佔已移至回收區的 002 空號");
+
+        vm.RestoreLastRemovedAsync().GetAwaiter().GetResult();
+        AssertTrue(File.Exists(s2.FilePath), "002 應可無衝突還原");
+        AssertEqual("004.png", Path.GetFileName(vm.Snapshots[0].FilePath), "還原舊圖不得蓋掉最新一張作為對照參照");
+        AssertEqual("003.png", Path.GetFileName(vm.Snapshots[1].FilePath), "清單應保持由新到舊順序");
+        AssertEqual("002.png", Path.GetFileName(vm.Snapshots[2].FilePath), "002 應插回 003 與 001 之間");
+        AssertEqual("001.png", Path.GetFileName(vm.Snapshots[3].FilePath), "最舊張應在最末位");
+        AssertTrue(vm.LastCapturedSnapshot == s4, "LastCapturedSnapshot 應維持最新 004.png");
+    }
+    finally { CleanupTempDir(dir); }
+}
+
+static void VideoSnapshotViewModel_CyclesPlaybackSpeedAndSavesTabPreference()
+{
+    string dir = CreateTempDir(); Directory.CreateDirectory(dir);
+    try
+    {
+        string videoPath = Path.Combine(dir, "speed.mp4");
+        File.WriteAllText(videoPath, "video");
+        var vm = new VideoSnapshotViewModel(new VideoService(), new RecordingIndexService());
+        var speeds = new List<double>();
+        vm.RequestSpeedChange += s => speeds.Add(s);
+
+        vm.LoadVideo(videoPath);
+        vm.MarkVideoOpened(TimeSpan.FromSeconds(10));
+        AssertEqual("1x", vm.PlaybackSpeedDisplay, "預設倍速顯示");
+        vm.CyclePlaybackSpeedCommand.Execute(null);
+        AssertEqual("1.5x", vm.PlaybackSpeedDisplay, "第一次切換應為 1.5x");
+        vm.CyclePlaybackSpeedCommand.Execute(null);
+        AssertEqual("2x", vm.PlaybackSpeedDisplay, "第二次切換應為 2x");
+        vm.CyclePlaybackSpeedCommand.Execute(null);
+        AssertEqual("1x", vm.PlaybackSpeedDisplay, "第三次切換應回到 1x");
+        AssertEqual(3, speeds.Count, "每次切換應觸發倍速事件");
+
+        string settingsPath = Path.Combine(dir, "settings.json");
+        var settings = new UserSettingsService(settingsPath);
+        settings.Save(new UserPreferences { LastTabIndex = 1 });
+        AssertEqual(1, settings.Load().LastTabIndex, "LastTabIndex 應正常保存與載入");
     }
     finally { CleanupTempDir(dir); }
 }

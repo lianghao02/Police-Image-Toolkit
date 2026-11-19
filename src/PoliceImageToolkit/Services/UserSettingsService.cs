@@ -9,6 +9,7 @@ namespace PoliceImageToolkit.Services;
 /// </summary>
 public sealed record UserPreferences
 {
+    public int LastTabIndex { get; init; } = 0;
     public string ImageTargetFormat { get; init; } = "JPG";
     public int ImageJpgQuality { get; init; } = 90;
     public bool ImageAutoOrient { get; init; } = true;

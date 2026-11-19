@@ -7,6 +7,8 @@ namespace PoliceImageToolkit;
 
 public partial class MainWindow : Window
 {
+    private DateTime _lastRepeatStepUtc = DateTime.MinValue;
+
     public MainWindow()
     {
         InitializeComponent();
@@ -18,6 +20,11 @@ public partial class MainWindow : Window
             MinHeight = Math.Min(MinHeight, area.Height);
             MaxWidth = area.Width; MaxHeight = area.Height;
             Width = Math.Min(Width, area.Width); Height = Math.Min(Height, area.Height);
+
+            if (ViewModel?.SelectedTabIndex == 1)
+            {
+                TabVideo.IsChecked = true;
+            }
         };
     }
 
@@ -25,6 +32,18 @@ public partial class MainWindow : Window
 
     private void MainWindow_PreviewKeyDown(object sender, KeyEventArgs e)
     {
+        // 在輸入框按 Esc 或 Enter 時退出文字輸入焦點，避免接下來按 Space 誤輸入空白。
+        if (Keyboard.FocusedElement is TextBox && (e.Key == Key.Escape || e.Key == Key.Return))
+        {
+            Keyboard.ClearFocus();
+            if (TabVideo.IsChecked == true)
+            {
+                ViewVideoSnapshot.Focus();
+            }
+            e.Handled = true;
+            return;
+        }
+
         // 焦點在文字輸入、下拉選單或滑桿時保留原生按鍵行為（避免方向鍵改選項時同時拖動影片）
         if (Keyboard.FocusedElement is TextBox or ComboBox or ComboBoxItem or Slider)
         {
@@ -42,75 +61,94 @@ public partial class MainWindow : Window
             return;
         }
 
-        if (Keyboard.Modifiers != ModifierKeys.None || e.IsRepeat) return;
         // 僅在影片截圖分頁時啟用快捷鍵
         if (TabVideo.IsChecked == true && ViewModel?.VideoSnapshot != null)
         {
             var vm = ViewModel.VideoSnapshot;
 
+            if (Keyboard.Modifiers == ModifierKeys.Control && e.Key == Key.Z)
+            {
+                ExecuteShortcut(vm.UndoLastCaptureCommand, e, allowRepeat: false);
+                return;
+            }
+
+            if (Keyboard.Modifiers == ModifierKeys.Shift)
+            {
+                switch (e.Key)
+                {
+                    case Key.Left:
+                    case Key.A:
+                        ExecuteStepShortcut(vm.StepBackwardHalfCommand, e);
+                        break;
+
+                    case Key.Right:
+                    case Key.D:
+                        ExecuteStepShortcut(vm.StepForwardHalfCommand, e);
+                        break;
+                }
+                return;
+            }
+
+            if (Keyboard.Modifiers != ModifierKeys.None) return;
+
             switch (e.Key)
             {
                 case Key.Space:
-                    if (vm.CaptureSnapshotCommand.CanExecute(null))
-                    {
-                        vm.CaptureSnapshotCommand.Execute(null);
-                        e.Handled = true;
-                    }
+                    ExecuteShortcut(vm.CaptureSnapshotCommand, e, allowRepeat: false);
                     break;
 
                 case Key.Left:
                 case Key.A:
-                    if (vm.StepBackwardCommand.CanExecute(null))
-                    {
-                        vm.StepBackwardCommand.Execute(null);
-                        e.Handled = true;
-                    }
+                    ExecuteStepShortcut(vm.StepBackwardCommand, e);
                     break;
 
                 case Key.Right:
                 case Key.D:
-                    if (vm.StepForwardCommand.CanExecute(null))
-                    {
-                        vm.StepForwardCommand.Execute(null);
-                        e.Handled = true;
-                    }
+                    ExecuteStepShortcut(vm.StepForwardCommand, e);
                     break;
 
                 case Key.Up:
                 case Key.W:
-                    if (vm.StepForward1sCommand.CanExecute(null))
-                    {
-                        vm.StepForward1sCommand.Execute(null);
-                        e.Handled = true;
-                    }
+                    ExecuteStepShortcut(vm.StepForward1sCommand, e);
                     break;
 
                 case Key.Down:
                 case Key.S:
-                    if (vm.StepBackward1sCommand.CanExecute(null))
-                    {
-                        vm.StepBackward1sCommand.Execute(null);
-                        e.Handled = true;
-                    }
-                    break;
-
-                case Key.Z:
-                    if (vm.UndoLastCaptureCommand.CanExecute(null))
-                    {
-                        vm.UndoLastCaptureCommand.Execute(null);
-                        e.Handled = true;
-                    }
+                    ExecuteStepShortcut(vm.StepBackward1sCommand, e);
                     break;
 
                 case Key.P:
                 case Key.Return:
-                    if (vm.PlayPauseCommand.CanExecute(null))
-                    {
-                        vm.PlayPauseCommand.Execute(null);
-                        e.Handled = true;
-                    }
+                    ExecuteShortcut(vm.PlayPauseCommand, e, allowRepeat: false);
                     break;
             }
+        }
+    }
+
+    private void ExecuteStepShortcut(ICommand command, KeyEventArgs e)
+    {
+        // 一律攔截事件，防止長按方向鍵時焦點在按鈕列左右移動。
+        e.Handled = true;
+        if (e.IsRepeat)
+        {
+            var now = DateTime.UtcNow;
+            if ((now - _lastRepeatStepUtc).TotalMilliseconds < 75) return;
+            _lastRepeatStepUtc = now;
+        }
+        if (command.CanExecute(null))
+        {
+            command.Execute(null);
+        }
+    }
+
+    private static void ExecuteShortcut(ICommand command, KeyEventArgs e, bool allowRepeat)
+    {
+        // 即使暫時不可執行，也必須攔截按鍵避免 Space 落入目前焦點按鈕引發誤按。
+        e.Handled = true;
+        if (!allowRepeat && e.IsRepeat) return;
+        if (command.CanExecute(null))
+        {
+            command.Execute(null);
         }
     }
 
@@ -118,9 +156,13 @@ public partial class MainWindow : Window
     {
         if (ViewImageConverter != null && ViewVideoSnapshot != null)
         {
-            if (ViewModel?.VideoSnapshot.IsPlaying == true)
+            if (ViewModel != null)
             {
-                ViewModel.VideoSnapshot.ExecutePlayPause();
+                if (ViewModel.VideoSnapshot.IsPlaying)
+                {
+                    ViewModel.VideoSnapshot.ExecutePlayPause();
+                }
+                ViewModel.SelectedTabIndex = 0;
             }
             ViewImageConverter.Visibility = Visibility.Visible;
             ViewVideoSnapshot.Visibility = Visibility.Collapsed;
@@ -131,6 +173,10 @@ public partial class MainWindow : Window
     {
         if (ViewImageConverter != null && ViewVideoSnapshot != null)
         {
+            if (ViewModel != null)
+            {
+                ViewModel.SelectedTabIndex = 1;
+            }
             ViewImageConverter.Visibility = Visibility.Collapsed;
             ViewVideoSnapshot.Visibility = Visibility.Visible;
         }

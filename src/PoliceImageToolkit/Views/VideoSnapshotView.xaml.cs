@@ -18,7 +18,8 @@ public partial class VideoSnapshotView : UserControl
     private readonly DrawingImage _playerImage;
     private bool _isUserDraggingSlider = false;
     private int _seekGeneration;
-    private readonly DispatcherTimer _seekTimer = new() { Interval = TimeSpan.FromMilliseconds(200) };
+    private readonly DispatcherTimer _seekTimer = new() { Interval = TimeSpan.FromMilliseconds(120) };
+    private Window? _previewWindow;
 
     public VideoSnapshotView()
     {
@@ -67,23 +68,27 @@ public partial class VideoSnapshotView : UserControl
         _seekGeneration++;
         _timer.Stop();
         _seekTimer.Stop();
+        _previewWindow?.Close();
+        _previewWindow = null;
         _mediaPlayer.Close();
         if (ViewModel != null) { ViewModel.HasVideoLoaded = false; ViewModel.IsPlaying = false; }
     }
 
     private void OpenLastSnapshot_Click(object sender, RoutedEventArgs e)
     {
-        var snapshot = ViewModel?.LastCapturedSnapshot;
+        var snapshot = ViewModel?.ActiveComparisonSnapshot;
         if (snapshot == null) return;
         try
         {
-            var bitmap = new BitmapImage();
-            bitmap.BeginInit(); bitmap.CacheOption = BitmapCacheOption.OnLoad;
-            bitmap.UriSource = new Uri(snapshot.FilePath); bitmap.EndInit(); bitmap.Freeze();
-            var image = new Image { Source = bitmap, Stretch = Stretch.None };
-            var scroll = new ScrollViewer { Content = image, HorizontalScrollBarVisibility = ScrollBarVisibility.Auto, VerticalScrollBarVisibility = ScrollBarVisibility.Auto };
-            var window = new Window { Title = $"{ViewModel!.ComparisonSource}（原尺寸，可捲動）", Width = 900, Height = 700, Content = scroll, Owner = Window.GetWindow(this), WindowStartupLocation = WindowStartupLocation.CenterOwner };
-            window.ShowDialog();
+            _previewWindow = ImagePreviewWindowHelper.ShowOrUpdate(
+                _previewWindow,
+                this,
+                snapshot.FilePath,
+                $"{ViewModel!.ComparisonSource}｜截圖對照檢視",
+                " · 按 Esc 關閉（不鎖定主視窗操作）",
+                540,
+                820,
+                () => _previewWindow = null);
         }
         catch (Exception ex) { MessageBox.Show($"無法開啟截圖：{ex.Message}", "截圖預覽"); }
     }
@@ -96,6 +101,7 @@ public partial class VideoSnapshotView : UserControl
             oldVm.RequestPlay -= Vm_RequestPlay;
             oldVm.RequestPause -= Vm_RequestPause;
             oldVm.RequestSeek -= Vm_RequestSeek;
+            oldVm.RequestSpeedChange -= Vm_RequestSpeedChange;
             oldVm.RequestCurrentFrame -= Vm_RequestCurrentFrame;
             oldVm.RequestCurrentPosition -= Vm_RequestCurrentPosition;
             oldVm.RequestSnapshotVisualFeedback -= Vm_RequestSnapshotVisualFeedback;
@@ -107,6 +113,7 @@ public partial class VideoSnapshotView : UserControl
             newVm.RequestPlay += Vm_RequestPlay;
             newVm.RequestPause += Vm_RequestPause;
             newVm.RequestSeek += Vm_RequestSeek;
+            newVm.RequestSpeedChange += Vm_RequestSpeedChange;
             newVm.RequestCurrentFrame += Vm_RequestCurrentFrame;
             newVm.RequestCurrentPosition += Vm_RequestCurrentPosition;
             newVm.RequestSnapshotVisualFeedback += Vm_RequestSnapshotVisualFeedback;
@@ -133,10 +140,16 @@ public partial class VideoSnapshotView : UserControl
 
     private void Vm_RequestPlay()
     {
+        _mediaPlayer.SpeedRatio = ViewModel?.PlaybackSpeed ?? 1.0;
         _mediaPlayer.Play();
         _timer.Start();
         if (ViewModel != null) ViewModel.IsPlaying = true;
         BtnPlayPause.Content = "暫停";
+    }
+
+    private void Vm_RequestSpeedChange(double speed)
+    {
+        _mediaPlayer.SpeedRatio = speed;
     }
 
     private void Vm_RequestPause()
@@ -260,11 +273,34 @@ public partial class VideoSnapshotView : UserControl
     private void Slider_PreviewMouseDown(object sender, MouseButtonEventArgs e)
     {
         _isUserDraggingSlider = true;
+        ViewModel?.BeginScrub();
     }
 
     private void Slider_PreviewMouseUp(object sender, MouseButtonEventArgs e)
     {
+        FinishSliderScrub();
+    }
+
+    private void Slider_LostMouseCapture(object sender, MouseEventArgs e)
+    {
+        if (_isUserDraggingSlider)
+        {
+            FinishSliderScrub();
+        }
+    }
+
+    private void FinishSliderScrub()
+    {
         _isUserDraggingSlider = false;
+        ViewModel?.EndScrub(TimelineSlider.Value);
+    }
+
+    private void PhonePreviewBox_PreviewMouseWheel(object sender, MouseWheelEventArgs e)
+    {
+        if (ViewModel?.HasVideoLoaded != true) return;
+        double step = Keyboard.Modifiers.HasFlag(ModifierKeys.Shift) ? 0.5 : 0.1;
+        ViewModel.StepTime(e.Delta > 0 ? step : -step);
+        e.Handled = true;
     }
 
     private void UserControl_DragOver(object sender, DragEventArgs e)

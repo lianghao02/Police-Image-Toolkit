@@ -11,7 +11,8 @@ public record SnapshotResult(
     long SizeBytes,
     BitmapSource? Thumbnail = null,
     BitmapSource? BottomStrip = null,
-    string? SourceFilePath = null
+    string? SourceFilePath = null,
+    BitmapSource? TopStrip = null
 );
 
 public interface IVideoService

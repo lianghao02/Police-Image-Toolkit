@@ -1,53 +1,28 @@
 # HANDOFF
 
-## 核心元資料 (Metadata)
+## 核心元資料
 - **Repository**：lianghao02/Police-Image-Toolkit
 - **Branch**：main
-- **Commit SHA**：75e27afeb747f233b3ee570238a9ba8e96a956d3（本輪修改前基準；本輪已提交，最新提交以 Git 記錄為準）
+- **Commit SHA**：8d0870e02742aa8df274d5473c07ba899ce75b12（含工作目錄尚未提交之 v11.6.0 修訂）
 - **Skill Version**：v1.0.0
-- **Task Type**：FIX
+- **Task Type**：IMPROVE / RELEASE（本機建置與驗證）
 - **Local Path Hint**：03_Police-Image-Toolkit
 
----
+## 目前狀態
+2026-11-19：已完成 v11.6.0 全方位 UI／UX 重構、鑑識流水號／還原順序修正、記憶體最佳化、檔案鎖／日誌路徑清理與文件同步；已完成本機單檔建置、QA 測試與啟動檢查，尚未執行 Git Commit／Push 或建立遠端 Release。
 
-P26-10-22：使用者已授權提交與發布。此提交包含本輪已驗證的修正文件。Tag、Release、部署與最終同步結果統一見控制中心 `docs/audit-release-20261022.md`，不得依提交前記錄重做修復。
+## 已完成與驗證
+- 使用 .NET SDK 8.0.406 執行 `scripts/qa.ps1`：Release 建置 **0 警告、0 錯誤**；核心測試 **`25/25`** 通過、來源紀錄整合測試 **`5/5`** 通過；`git diff --check` 與敏感值掃描通過。
+- 使用 `scripts/build.ps1` 產出 `win-x64` 自含式單檔 `dist/PoliceImageToolkit.exe`（v11.6.0，大小 `68.64 MB`）。
+- 單檔 SHA-256：`f7135d21ac8ab44500e67c6370c8986265531fd4e95a988b2ffd75618550d27c`。
+- 已於本機驗證 `dist/PoliceImageToolkit.exe` 啟動與正常關閉（`Responding=True`、主視窗標題顯示 `v11.6.0`、`ExitCode=0`）。
 
-## 本輪目標
-消除 AGENTS.md 前後互相矛盾的測試指令。
+## 本輪核心修訂重點
+- **手機錄影截圖工作台**：雙直式「目前影片畫面｜上一張截圖對照」並排（整張／底部 1/3／頂部 1/3／非模態原圖視窗）、補齊 `±0.5 秒`（按鈕及 `Shift + ←/→`）、`1x / 1.5x / 2x` 倍速切換、手機框滾輪 `±0.1 秒`（`Shift` 為 `0.5 秒`）、清單縮圖與點擊預覽、單張移至回收區、多段「切換分段」選單。
+- **操作與鍵盤修復**：復原改為 `Ctrl + Z`；修正長按方向鍵焦點跳動、微調後立刻按 `Space` 漏截、輸入框按 `Esc`/`Enter` 恢復快捷鍵，以及 `App.xaml` 全域 `TextBlock` 字色蓋掉 ToolTip／主按鈕白字的問題。
+- **鑑識順序、記憶體與輸出潔淨化**：截圖流水號改自既有與回收區最大號之後遞增（不補空號）；還原舊圖依時間與檔名順序插回；頂／底部對照條改為按需單張裁切快取（不擴大常駐記憶體）；`.report_index.lock` 移至 `%LOCALAPPDATA%\PoliceImageToolkit\locks\`；底部新增條件式「開啟／清空回收區」。
+- **圖片轉檔與環境防禦**：新增「加入資料夾」鈕、清單縮圖與點擊預覽；記憶上次停留分頁（`LastTabIndex`）；`crash.log` 改寫入 `%LOCALAPPDATA%\PoliceImageToolkit\crash.log`；同步更新 `README.md`、`CHANGELOG.md` 與版本宣告。
 
-## 基準與已確認事實 (Baseline & Confirmed Facts)
-起始為上述分支／SHA，工作目錄乾淨。只修改本輪已重現問題；19 排除。
-
-## 已完成 (Completed)
-第 4 節改用既有 scripts/test.ps1，與第 1 節說明一致；保留 dotnet test 對自訂主控台測試會零測試結束的警示。
-
-## 異動檔案 (Changed Files)
-AGENTS.md、HANDOFF.md。
-
-## 刻意未修改 (Do Not Do / Deliberately Omitted)
-未修改使用者原始資料、全域規則、其他工作階段成果或既有發布包。依本輪授權提交與部署。
-
-## 尚未完成 (Remaining Work)
-- **P1 (阻斷/必須)**：本機修正無已知阻斷。
-- **P2 (重要/當次)**：發布前依下列限制補必要實測；本輪尚未部署。
-- **P3 (改善建議/暫緩)**：承接既有長截圖功能已移除且勿再加回的邊界；本輪不改產品、版本或發布包，也不重新宣稱原生 GUI 驗收。
-
-## 驗證結果 (Validation)
-### 已執行測試與結果
-核對 scripts/test.ps1 確實執行 dotnet run --project ... -c Release；確認 AGENTS 不再列出錯誤的 dotnet test 執行指令。純文件修改，未重跑 .NET 測試。
-### 尚未驗證項目
-承接既有長截圖功能已移除且勿再加回的邊界；本輪不改產品、版本或發布包，也不重新宣稱原生 GUI 驗收。
-### 已知風險 (Known Risks)
-原始碼修正不會自動更新線上服務、已安裝 PWA 或舊下載包。
-
-## Git 狀態
-- Commit：本輪修正與發布準備合併為獨立提交；實際 SHA 見 Git 與中央發布報告。
-- Push：使用者已授權，本提交後執行並核對。
-- Working Tree：提交後確認 Clean；不包含被忽略的成品與測試環境。
-- Branch：main。
-
-## 下一步建議動作 (Next Recommended Action)
-核對中央 `docs/audit-release-20261022.md` 的實際發布結果；成功後停止擴大修改，僅保留已註明的人工驗收。
-
-## 發布狀態 (Release Status)
-使用者已授權本輪發布；產品版本與實際 Release／部署核對結果以中央發布報告為準。人工驗收缺口不冒充通過。
+## 限制與下一步
+- 本機自動化測試不涵蓋完整實片（HEVC/MP4/MOV）長期播放操作與多 DPI（125%/150%）人工視覺驗收；WPF `MediaPlayer` 仍依賴系統可用視訊解碼器。
+- 若確認 `RUN.bat` 實測無誤，請再決定是否執行 Git Commit、Push 與推動 `release/v11.6.0` 分支發布。

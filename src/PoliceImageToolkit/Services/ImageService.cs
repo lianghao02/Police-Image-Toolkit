@@ -148,7 +148,7 @@ public class ImageService : IImageService
 
     private static FileStream CreateUniqueOutputFile(string outputDirectory, string baseName, string extension, out string outputPath)
     {
-        for (int counter = 0; ; counter++)
+        for (int counter = 0; counter <= 10_000; counter++)
         {
             string suffix = counter == 0 ? string.Empty : $"_{counter}";
             string candidate = Path.Combine(outputDirectory, $"{baseName}{suffix}.{extension}");
@@ -163,6 +163,8 @@ public class ImageService : IImageService
                 // 同名檔已存在或被另一個平行工作搶先建立，改用下一個流水號。
             }
         }
+
+        throw new IOException("同名輸出檔案數量超過安全上限，無法建立新檔。");
     }
 
     private static void DeletePartialOutput(string? outputPath)

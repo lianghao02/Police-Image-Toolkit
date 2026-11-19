@@ -14,8 +14,8 @@ public partial class App : Application
 
     private void App_DispatcherUnhandledException(object sender, DispatcherUnhandledExceptionEventArgs e)
     {
-        LogException("DispatcherUnhandledException", e.Exception);
-        MessageBox.Show($"應用程式發生未預期錯誤：\n\n{e.Exception.Message}\n\n詳細資訊已記錄至 crash.log", "錯誤", MessageBoxButton.OK, MessageBoxImage.Error);
+        string logPath = LogException("DispatcherUnhandledException", e.Exception);
+        MessageBox.Show($"應用程式發生未預期錯誤：\n\n{e.Exception.Message}\n\n詳細資訊已記錄至：\n{logPath}", "錯誤", MessageBoxButton.OK, MessageBoxImage.Error);
         e.Handled = true;
     }
 
@@ -27,17 +27,21 @@ public partial class App : Application
         }
     }
 
-    private static void LogException(string source, Exception ex)
+    private static string LogException(string source, Exception ex)
     {
+        string appData = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
+        string baseDir = string.IsNullOrWhiteSpace(appData) ? Path.GetTempPath() : Path.Combine(appData, "PoliceImageToolkit");
+        string logPath = Path.Combine(baseDir, "crash.log");
         try
         {
-            string logPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "crash.log");
-            string content = $"[{DateTime.Now:yyyy-MM-dd HH:mm:ss}] [{source}]\n{ex}\n\n";
+            Directory.CreateDirectory(baseDir);
+            string content = $"[{DateTime.Now:yyyy-MM-dd HH:mm:ss}] [{source}] {ex.GetType().Name} (0x{ex.HResult:X8}): {ex.Message}\n{ex.StackTrace}\n\n";
             File.AppendAllText(logPath, content);
         }
         catch
         {
             // 忽略寫入日誌失敗
         }
+        return logPath;
     }
 }

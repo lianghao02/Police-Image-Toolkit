@@ -1,5 +1,6 @@
 using System.Globalization;
 using System.IO;
+using System.Text.RegularExpressions;
 using System.Windows;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
@@ -63,25 +64,15 @@ public class VideoService : IVideoService
 
             var fi = new FileInfo(reservedOutputPath);
 
-            // 產生輕量縮圖供 UI 對照顯示 (縮小至寬度 400px)
+            // 產生輕量縮圖供清單顯示 (縮小至寬度 200px，降低長工作階段記憶體佔用)
             BitmapSource thumb = processedBitmap;
-            if (processedBitmap.PixelWidth > 400)
+            if (processedBitmap.PixelWidth > 200)
             {
-                double scale = 400.0 / processedBitmap.PixelWidth;
+                double scale = 200.0 / processedBitmap.PixelWidth;
                 var scaled = new TransformedBitmap(processedBitmap, new ScaleTransform(scale, scale));
                 scaled.Freeze();
                 thumb = scaled;
             }
-
-            int stripHeight = Math.Max(1, processedBitmap.PixelHeight / 4);
-            BitmapSource strip = new CroppedBitmap(processedBitmap,
-                new Int32Rect(0, processedBitmap.PixelHeight - stripHeight, processedBitmap.PixelWidth, stripHeight));
-            if (strip.PixelWidth > 1000)
-            {
-                double stripScale = 1000.0 / strip.PixelWidth;
-                strip = new TransformedBitmap(strip, new ScaleTransform(stripScale, stripScale));
-            }
-            strip.Freeze();
 
             return new SnapshotResult(
                 reservedOutputPath,
@@ -90,8 +81,9 @@ public class VideoService : IVideoService
                 processedBitmap.PixelHeight,
                 fi.Length,
                 thumb,
-                strip,
-                videoFilePath
+                null,
+                videoFilePath,
+                null
             );
             }
             catch
@@ -174,9 +166,25 @@ public class VideoService : IVideoService
         return renderBitmap;
     }
 
+    public static BitmapSource CreateComparisonStrip(BitmapSource source, bool top)
+    {
+        int stripHeight = Math.Max(1, source.PixelHeight / 3);
+        int y = top ? 0 : Math.Max(0, source.PixelHeight - stripHeight);
+        BitmapSource strip = new CroppedBitmap(source, new Int32Rect(0, y, source.PixelWidth, stripHeight));
+        if (strip.PixelWidth > 1080)
+        {
+            double stripScale = 1080.0 / strip.PixelWidth;
+            strip = new TransformedBitmap(strip, new ScaleTransform(stripScale, stripScale));
+        }
+        strip.Freeze();
+        return strip;
+    }
+
     private static FileStream CreateSequentialOutputFile(string outputDirectory, string prefix, string extension, out string outputPath)
     {
-        for (int sequence = 1; ; sequence++)
+        // 從輸出資料夾與暫存回收區的最大既有流水號之後起算，避免刪圖後補空號打亂順序或導致無法還原。
+        int startSequence = FindMaxSequence(outputDirectory, prefix) + 1;
+        for (int sequence = startSequence; sequence < startSequence + 100_000; sequence++)
         {
             string fileName = string.IsNullOrWhiteSpace(prefix)
                 ? $"{sequence:000}.{extension}"
@@ -193,6 +201,48 @@ public class VideoService : IVideoService
                 // 同名截圖已存在或被其他工作搶先建立，改用下一個流水號。
             }
         }
+
+        throw new IOException("無法建立不重複的截圖輸出檔案。");
+    }
+
+    private static int FindMaxSequence(string outputDirectory, string prefix)
+    {
+        int max = 0;
+        string pattern = string.IsNullOrWhiteSpace(prefix)
+            ? @"^(\d+)\.[^.]+$"
+            : $@"^{Regex.Escape(prefix)}_(\d+)\.[^.]+$";
+        var regex = new Regex(pattern, RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+
+        if (Directory.Exists(outputDirectory))
+        {
+            foreach (string file in Directory.EnumerateFiles(outputDirectory))
+            {
+                var m = regex.Match(Path.GetFileName(file));
+                if (m.Success && int.TryParse(m.Groups[1].Value, out int n) && n > max)
+                {
+                    max = n;
+                }
+            }
+
+            string recoveryDir = Path.Combine(outputDirectory, ".pit-recovery");
+            if (Directory.Exists(recoveryDir))
+            {
+                foreach (string file in Directory.EnumerateFiles(recoveryDir))
+                {
+                    string name = Path.GetFileName(file);
+                    // 回收檔格式為 "{32hex}_{原檔名}"
+                    int sep = name.IndexOf('_');
+                    string originalName = sep == 32 ? name[(sep + 1)..] : name;
+                    var m = regex.Match(originalName);
+                    if (m.Success && int.TryParse(m.Groups[1].Value, out int n) && n > max)
+                    {
+                        max = n;
+                    }
+                }
+            }
+        }
+
+        return max;
     }
 
     private static string SanitizeFileNameSegment(string value)

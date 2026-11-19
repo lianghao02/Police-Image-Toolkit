@@ -32,17 +32,25 @@ public class MainViewModel : ViewModelBase
 
         ImageConverter = new ImageConverterViewModel(imageService, outputIndexService, preferences, SavePreferences);
         VideoSnapshot = new VideoSnapshotViewModel(videoService, outputIndexService, preferences, SavePreferences);
+        _selectedTabIndex = preferences.LastTabIndex == 1 ? 1 : 0;
 
         CurrentVersionDisplay = _updateService.GetInstalledVersion();
         CheckUpdateCommand = new RelayCommand(async _ => await ExecuteCheckUpdateAsync(), _ => !IsCheckingUpdate);
     }
 
-    public string AppTitle => $"手機圖片轉檔與錄影截圖 (Police Image Toolkit {CurrentVersionDisplay})";
+    public string AppTitle => $"手機圖片轉檔與錄影截圖｜Police Image Toolkit {CurrentVersionDisplay}";
 
     public int SelectedTabIndex
     {
         get => _selectedTabIndex;
-        set => SetProperty(ref _selectedTabIndex, value);
+        set
+        {
+            int normalized = value == 1 ? 1 : 0;
+            if (SetProperty(ref _selectedTabIndex, normalized))
+            {
+                SavePreferences();
+            }
+        }
     }
 
     public string CurrentVersionDisplay
@@ -77,6 +85,7 @@ public class MainViewModel : ViewModelBase
     {
         _settingsService.Save(new UserPreferences
         {
+            LastTabIndex = SelectedTabIndex,
             ImageTargetFormat = ImageConverter.TargetFormat,
             ImageJpgQuality = ImageConverter.JpgQuality,
             ImageAutoOrient = ImageConverter.AutoOrient,
