@@ -7,6 +7,15 @@ using System.Windows.Media.Imaging;
 
 var tests = new (string Name, Action Execute)[]
 {
+    ("各段來源紀錄的失敗提示與重試隔離", VideoSegments_IndexRetryIsScoped),
+    ("第二段保留上段對照且清單、設定與整批移除分開", VideoSegments_KeepComparisonAndSeparateWork),
+    ("還原及清單清除只影響目前影片，對照可手動關閉", VideoSegments_RestoreAndClearAreScoped),
+    ("清空介面後仍可重試尚未同步的來源紀錄", IndexRetry_SurvivesClearingLists),
+    ("截圖回收可還原且拒絕覆寫新同名檔", VideoRecovery_RestoresWithoutOverwrite),
+    ("換片期間存檔仍保留原來源且不污染新片預覽", VideoCapture_KeepsOriginalSourceAcrossLoad),
+    ("刪除與截圖互斥且依物件移除清單", VideoDeletion_IsSerialized),
+    ("取消後仍為成功輸出建立索引，批次設定固定", ImageBatch_CancelStillIndexesAndFreezesOptions),
+    ("多頁 TIFF 不得只轉第一頁而回報成功", ImageConversion_RejectsMultipageTiff),
     ("影片截圖建立獨立資料夾並使用流水號", VideoSnapshot_UsesFolderAndSequentialNames),
     ("影片截圖支援時間戳浮水印渲染、JPG 格式與非法前綴字元過濾", VideoSnapshot_RendersTimestampOverlayAndSanitizesPrefix),
     ("輸出索引保留最小追溯資訊並可移除已刪除檔案", OutputIndex_WritesAndRemovesEntries),
@@ -16,7 +25,7 @@ var tests = new (string Name, Action Execute)[]
     ("圖片轉檔支援同名防碰撞且取消時不殘留檔案", ImageConversion_AvoidsNameCollisionAndCleansCancelledTempFile),
     ("圖片轉檔拒絕動畫 GIF 與不支援之目標格式", ImageConversion_RejectsAnimatedGifAndUnsupportedTargetFormat),
     ("圖片轉檔 ViewModel 支援資料夾遞迴展開、去重與重設重轉", ImageConverterViewModel_ExpandsFoldersDeduplicatesAndResetsTasks),
-    ("影片截圖 ViewModel 於 MediaOpened 前鎖定截圖並支援復原刪除", VideoSnapshotViewModel_LocksCaptureUntilMediaOpenedAndSupportsUndo),
+    ("影片截圖於載入前鎖定操作並支援安全移除", VideoSnapshotViewModel_LocksCaptureUntilMediaOpenedAndSupportsUndo),
     ("更新服務可正確比對版本並只允許 HTTPS 下載網址", UpdateService_ComparesSemanticVersionsAndValidatesHttpsUrls),
     ("偏好設定服務可正常讀寫並在設定損毀時退回預設值", UserSettingsService_RoundTripsAndHandlesCorruptedFile)
 };
@@ -60,7 +69,9 @@ static void VideoSnapshot_UsesFolderAndSequentialNames()
 
         AssertEqual("001.png", Path.GetFileName(first.FilePath), "影片第 1 張檔名");
         AssertEqual("002.png", Path.GetFileName(second.FilePath), "影片第 2 張檔名");
-        AssertEqual(Path.Combine(directory, "sample_Snapshots"), Path.GetDirectoryName(first.FilePath)!, "影片輸出資料夾");
+        AssertEqual(directory, Path.GetDirectoryName(Path.GetDirectoryName(first.FilePath))!, "影片輸出應在選定主資料夾下");
+        AssertTrue(Path.GetFileName(Path.GetDirectoryName(first.FilePath)!).StartsWith("sample_Snapshots_"), "資料夾保留來源名稱並附識別碼");
+        AssertEqual(Path.GetDirectoryName(first.FilePath)!, Path.GetDirectoryName(second.FilePath)!, "同一來源持續使用同一資料夾");
     }
     finally
     {
@@ -354,7 +365,7 @@ static void VideoSnapshotViewModel_LocksCaptureUntilMediaOpenedAndSupportsUndo()
         string fakeVideo = Path.Combine(directory, "clip.mp4");
         File.WriteAllBytes(fakeVideo, [1, 2, 3]);
 
-        var vm = new VideoSnapshotViewModel(new VideoService(), new OutputIndexService())
+        var vm = new VideoSnapshotViewModel(new VideoService(), new OutputIndexService(), deleteFile: File.Delete)
         {
             OutputDirectory = directory
         };
@@ -429,6 +440,254 @@ static void UserSettingsService_RoundTripsAndHandlesCorruptedFile()
     }
 }
 
+static void VideoSegments_IndexRetryIsScoped()
+{
+    string dir = CreateTempDir(); Directory.CreateDirectory(dir);
+    try
+    {
+        string a = Path.Combine(dir, "a.mp4"), b = Path.Combine(dir, "b.mp4");
+        File.WriteAllText(a, "a"); File.WriteAllText(b, "b");
+        var service = new DelayedVideoService(dir); service.Complete();
+        var index = new RecordingIndexService { FailAppend = true };
+        var vm = new VideoSnapshotViewModel(service, index, deleteFile: File.Delete);
+        vm.RequestCurrentFrame += () => CreateTestBitmap(16, 32);
+        vm.LoadVideo(a); vm.MarkVideoOpened(TimeSpan.FromSeconds(5));
+        vm.CaptureSnapshotAsync().GetAwaiter().GetResult();
+        AssertTrue(vm.IndexMessage.Contains("失敗"), "第一段保留索引失敗提示");
+        vm.LoadVideo(b);
+        AssertEqual(string.Empty, vm.IndexMessage, "第二段不誤顯示第一段的索引結果");
+        AssertTrue(!vm.RetryIndexCommand.CanExecute(null), "第二段不能操作第一段的索引重試");
+        vm.LoadVideo(a);
+        AssertTrue(vm.IndexMessage.Contains("失敗") && vm.RetryIndexCommand.CanExecute(null), "切回第一段找回失敗提示與重試");
+        index.FailAppend = false;
+        vm.RetrySnapshotIndexAsync().GetAwaiter().GetResult();
+        AssertEqual("a.mp4", index.Entries.Single().SourceFile, "重試仍使用第一段原來源");
+    }
+    finally { CleanupTempDir(dir); }
+}
+
+static void VideoSegments_KeepComparisonAndSeparateWork()
+{
+    string dir = CreateTempDir(); Directory.CreateDirectory(dir);
+    try
+    {
+        string a = Path.Combine(dir, "first.mp4"), b = Path.Combine(dir, "second.mp4");
+        File.WriteAllText(a, "a"); File.WriteAllText(b, "b");
+        var vm = new VideoSnapshotViewModel(new VideoService(), new OutputIndexService()) { OutputDirectory = dir };
+        vm.RequestCurrentFrame += () => CreateTestBitmap(16, 32);
+        vm.LoadVideo(a); vm.MarkVideoOpened(TimeSpan.FromSeconds(5));
+        vm.CasePrefix = "first-case";
+        var first = vm.CaptureSnapshotAsync().GetAwaiter().GetResult()!;
+        vm.LoadVideo(b); vm.MarkVideoOpened(TimeSpan.FromSeconds(5));
+        AssertEqual(0, vm.Snapshots.Count, "第二段不能混入第一段清單");
+        AssertTrue(vm.IsPreviousSegmentComparison && vm.LastCapturedSnapshot == first, "第一張截圖前保留上段最後一張並清楚標示");
+        AssertEqual(string.Empty, vm.CasePrefix, "新影片前綴不可誤用上一段");
+        AssertEqual(dir, vm.OutputDirectory, "儲存主位置沿用並在介面明示");
+        AssertTrue(!vm.UndoLastCaptureCommand.CanExecute(null), "第二段尚未截圖時 Z 必須停用");
+        vm.ExecuteUndoLastCaptureAsync().GetAwaiter().GetResult();
+        AssertTrue(File.Exists(first.FilePath), "不得移除上一段最後一張");
+        vm.OutputDirectory = Path.Combine(dir, "other-root");
+        var second = vm.CaptureSnapshotAsync().GetAwaiter().GetResult()!;
+        AssertTrue(vm.LastCapturedSnapshot == second && !vm.IsPreviousSegmentComparison, "截取第二段後使用本段對照");
+        AssertTrue(vm.Snapshots.Count == 1 && vm.Snapshots.Single().SourceFilePath == b, "數量只計目前影片");
+        vm.MoveCurrentSnapshotsToRecoveryAsync().GetAwaiter().GetResult();
+        AssertTrue(File.Exists(first.FilePath) && !File.Exists(second.FilePath), "整批移除只影響目前影片");
+        AssertTrue(vm.IsPreviousSegmentComparison && vm.LastCapturedSnapshot == first, "本段截圖移除後仍能對照上一段");
+        vm.RestoreLastRemovedAsync().GetAwaiter().GetResult();
+        AssertTrue(File.Exists(second.FilePath) && vm.Snapshots.Count == 1, "第二段可獨立還原");
+        vm.LoadVideo(a);
+        AssertEqual(1, vm.Snapshots.Count, "切回第一段時找回原清單");
+        AssertEqual("first-case", vm.CasePrefix, "切回第一段恢復自己的前綴");
+        AssertEqual(dir, vm.OutputDirectory, "切回第一段恢復自己的儲存位置");
+    }
+    finally { CleanupTempDir(dir); }
+}
+
+static void VideoSegments_RestoreAndClearAreScoped()
+{
+    string dir = CreateTempDir(); Directory.CreateDirectory(dir);
+    try
+    {
+        string a = Path.Combine(dir, "a.mp4"), b = Path.Combine(dir, "b.mp4");
+        File.WriteAllText(a, "a"); File.WriteAllText(b, "b");
+        var vm = new VideoSnapshotViewModel(new VideoService(), new OutputIndexService()) { OutputDirectory = dir };
+        vm.RequestCurrentFrame += () => CreateTestBitmap(16, 32);
+        vm.LoadVideo(a); vm.MarkVideoOpened(TimeSpan.FromSeconds(5));
+        var first = vm.CaptureSnapshotAsync().GetAwaiter().GetResult()!;
+        vm.LoadVideo(b); vm.MarkVideoOpened(TimeSpan.FromSeconds(5));
+        vm.ClearPreviousComparisonCommand.Execute(null);
+        AssertTrue(vm.LastCapturedSnapshot == null && File.Exists(first.FilePath), "關閉上段對照不刪除截圖");
+        vm.LoadVideo(a); vm.MarkVideoOpened(TimeSpan.FromSeconds(5));
+        vm.ExecuteUndoLastCaptureAsync().GetAwaiter().GetResult();
+        vm.LoadVideo(b); vm.MarkVideoOpened(TimeSpan.FromSeconds(5));
+        AssertTrue(!vm.RestoreLastRemovedCommand.CanExecute(null), "第二段不得還原第一段的回收檔");
+        vm.RestoreLastRemovedAsync().GetAwaiter().GetResult();
+        AssertTrue(!File.Exists(first.FilePath), "跨段還原必須不做任何檔案變更");
+        var second = vm.CaptureSnapshotAsync().GetAwaiter().GetResult()!;
+        vm.ClearSnapshotsCommand.Execute(null);
+        AssertEqual(0, vm.Snapshots.Count, "只清空本段清單");
+        AssertTrue(File.Exists(second.FilePath), "清空介面不影響磁碟檔案");
+        vm.LoadVideo(a);
+        AssertTrue(vm.RestoreLastRemovedCommand.CanExecute(null), "切回第一段仍能還原其回收檔");
+        vm.RestoreLastRemovedAsync().GetAwaiter().GetResult();
+        AssertTrue(File.Exists(first.FilePath) && vm.Snapshots.Count == 1, "原段清單恢復");
+        vm.LoadVideo(b);
+        AssertEqual(0, vm.Snapshots.Count, "其他影片的清單維持原狀");
+    }
+    finally { CleanupTempDir(dir); }
+}
+
+static void IndexRetry_SurvivesClearingLists()
+{
+    string dir = CreateTempDir(); Directory.CreateDirectory(dir);
+    try
+    {
+        var index = new RecordingIndexService { FailAppend = true };
+        var service = new DelayedVideoService(dir); service.Complete();
+        var video = new VideoSnapshotViewModel(service, index, deleteFile: File.Delete);
+        string source = Path.Combine(dir, "clip.mp4"); File.WriteAllText(source, "video");
+        video.RequestCurrentFrame += () => CreateTestBitmap(8, 8);
+        video.LoadVideo(source); video.MarkVideoOpened(TimeSpan.FromSeconds(3));
+        video.CaptureSnapshotAsync().GetAwaiter().GetResult();
+        video.ClearSnapshotsCommand.Execute(null);
+        AssertTrue(video.RetryIndexCommand.CanExecute(null), "清單已清空仍應保留來源紀錄重試");
+        index.FailAppend = false;
+        video.RetrySnapshotIndexAsync().GetAwaiter().GetResult();
+        AssertEqual("clip.mp4", index.Entries.Single().SourceFile, "必須保留原來源");
+
+        index.Entries.Clear(); index.FailAppend = true;
+        string picture = Path.Combine(dir, "picture.png"); SaveTestBitmap(picture, new PngBitmapEncoder());
+        var image = new ImageConverterViewModel(new ImageService(), index);
+        image.AddFiles([picture]); image.StartConvertAsync().GetAwaiter().GetResult();
+        image.ClearAllCommand.Execute(null);
+        AssertTrue(image.RetryIndexCommand.CanExecute(null), "圖片清單已清空仍能重試來源紀錄");
+        index.FailAppend = false; image.RetryIndexCommand.Execute(null);
+        AssertEqual("picture.png", index.Entries.Single().SourceFile, "重試保留圖片來源");
+    }
+    finally { CleanupTempDir(dir); }
+}
+
+static void VideoRecovery_RestoresWithoutOverwrite()
+{
+    string dir = CreateTempDir(); Directory.CreateDirectory(dir);
+    try
+    {
+        var vm = new VideoSnapshotViewModel(new VideoService(), new RecordingIndexService());
+        string path = Path.Combine(dir, "001.png"); File.WriteAllText(path, "original snapshot");
+        string source = Path.Combine(dir, "clip.mp4"); File.WriteAllText(source, "video");
+        vm.LoadVideo(source);
+        vm.Snapshots.Add(new SnapshotResult(path, TimeSpan.Zero, 8, 8, 1, SourceFilePath: source));
+        vm.ExecuteUndoLastCaptureAsync().GetAwaiter().GetResult();
+        AssertTrue(!File.Exists(path) && vm.RestoreLastRemovedCommand.CanExecute(null), "移除後應可還原");
+        File.WriteAllText(path, "new snapshot");
+        vm.RestoreLastRemovedAsync().GetAwaiter().GetResult();
+        AssertEqual("new snapshot", File.ReadAllText(path), "還原不得覆寫新同名檔");
+        AssertTrue(vm.RestoreLastRemovedCommand.CanExecute(null), "撞名後仍應保留回收檔");
+        File.Delete(path);
+        vm.RestoreLastRemovedAsync().GetAwaiter().GetResult();
+        AssertEqual("original snapshot", File.ReadAllText(path), "應還原原截圖內容");
+        AssertTrue(!vm.RestoreLastRemovedCommand.CanExecute(null) && vm.Snapshots.Count == 1, "還原後更新清單與按鈕狀態");
+    }
+    finally { CleanupTempDir(dir); }
+}
+
+static void VideoCapture_KeepsOriginalSourceAcrossLoad()
+{
+    string dir = CreateTempDir();
+    Directory.CreateDirectory(dir);
+    try
+    {
+        string a = Path.Combine(dir, "source-a.mp4"), b = Path.Combine(dir, "source-b.mp4");
+        File.WriteAllText(a, "a"); File.WriteAllText(b, "b");
+        var service = new DelayedVideoService(dir);
+        var index = new RecordingIndexService();
+        var vm = new VideoSnapshotViewModel(service, index, deleteFile: File.Delete);
+        vm.RequestCurrentFrame += () => CreateTestBitmap(16, 16);
+        int feedbackCount = 0;
+        vm.RequestSnapshotVisualFeedback += () => feedbackCount++;
+        vm.LoadVideo(a); vm.MarkVideoOpened(TimeSpan.FromSeconds(10));
+        var capture = vm.CaptureSnapshotAsync();
+        AssertEqual(0, feedbackCount, "存檔完成前不可回報成功");
+        vm.LoadVideo(b); vm.MarkVideoOpened(TimeSpan.FromSeconds(10));
+        service.Complete(); capture.GetAwaiter().GetResult();
+        AssertEqual("source-a.mp4", index.Entries.Single().SourceFile, "索引來源必須是截圖時的影片");
+        AssertTrue(vm.LastCapturedSnapshot == null, "換片後不能出現上一部影片的對照圖");
+        AssertEqual(0, feedbackCount, "舊工作不能在新影片顯示成功閃光");
+        AssertEqual(0, vm.Snapshots.Count, "舊影片背景完成不得加入目前影片清單");
+        vm.LoadVideo(a);
+        AssertTrue(vm.Snapshots.Single().SourceFilePath == a, "切回原影片可查看背景完成的截圖");
+    }
+    finally { CleanupTempDir(dir); }
+}
+
+static void VideoDeletion_IsSerialized()
+{
+    string dir = CreateTempDir(); Directory.CreateDirectory(dir);
+    try
+    {
+        var index = new RecordingIndexService { DelayRemoval = true };
+        var vm = new VideoSnapshotViewModel(new VideoService(), index, deleteFile: File.Delete);
+        string file = Path.Combine(dir, "001.png"); File.WriteAllText(file, "snapshot");
+        vm.Snapshots.Add(new SnapshotResult(file, TimeSpan.Zero, 8, 8, 1));
+        var deleting = vm.ExecuteUndoLastCaptureAsync();
+        AssertTrue(vm.IsBusy, "索引同步完成前維持忙碌狀態");
+        AssertTrue(!vm.ClearSnapshotsCommand.CanExecute(null), "刪除中不得清空清單");
+        AssertTrue(!vm.UndoLastCaptureCommand.CanExecute(null), "刪除中不得再次刪除");
+        string another = Path.Combine(dir, "another.mp4"); File.WriteAllText(another, "video");
+        vm.LoadVideo(another);
+        AssertEqual(string.Empty, vm.VideoPath, "移除紀錄同步中不得換片而改變操作範圍");
+        vm.ExecuteUndoLastCaptureAsync().GetAwaiter().GetResult();
+        index.Removal.SetResult(); deleting.GetAwaiter().GetResult();
+        AssertEqual(0, vm.Snapshots.Count, "不得移除其他項目或超出索引");
+        AssertTrue(!vm.IsBusy, "刪除完成後恢復操作");
+    }
+    finally { CleanupTempDir(dir); }
+}
+
+static void ImageBatch_CancelStillIndexesAndFreezesOptions()
+{
+    string dir = CreateTempDir(); Directory.CreateDirectory(dir);
+    try
+    {
+        var image = new ControlledImageService();
+        var index = new RecordingIndexService();
+        var vm = new ImageConverterViewModel(image, index) { TargetFormat = "JPG", JpgQuality = 90 };
+        for (int i = 0; i < 6; i++)
+        {
+            string path = Path.Combine(dir, $"{i}.png"); File.WriteAllText(path, "source");
+            vm.AddFiles([path]);
+        }
+        var batch = vm.StartConvertAsync();
+        image.Started.Task.GetAwaiter().GetResult();
+        vm.TargetFormat = "PNG"; vm.JpgQuality = 10;
+        image.Release.SetResult();
+        image.SecondWave.Task.GetAwaiter().GetResult();
+        vm.CancelConvertCommand.Execute(null);
+        batch.GetAwaiter().GetResult();
+        AssertTrue(index.Entries.Count > 0, "取消後仍必須補齊成功輸出的索引");
+        AssertTrue(image.Options.All(x => x.TargetFormat == "JPG" && x.JpgQuality == 90), "整批必須使用開始時的設定");
+        AssertTrue(!vm.IsProcessing && vm.CanEditSettings, "取消後設定與操作恢復");
+    }
+    finally { CleanupTempDir(dir); }
+}
+
+static void ImageConversion_RejectsMultipageTiff()
+{
+    string dir = CreateTempDir(); Directory.CreateDirectory(dir);
+    try
+    {
+        string path = Path.Combine(dir, "pages.tiff");
+        var encoder = new TiffBitmapEncoder();
+        encoder.Frames.Add(BitmapFrame.Create(CreateTestBitmap(8, 8)));
+        encoder.Frames.Add(BitmapFrame.Create(CreateTestBitmap(8, 8)));
+        using (var fs = File.Create(path)) encoder.Save(fs);
+        var item = CreateImageTask(path);
+        new ImageService().ConvertAsync(item, new ImageConvertOptions("PNG", 90, Path.Combine(dir, "out"), true, 0)).GetAwaiter().GetResult();
+        AssertTrue(item.Status == PoliceImageToolkit.Models.TaskStatus.Failed && string.IsNullOrEmpty(item.OutputPath), "多頁 TIFF 必須明確拒絕且不產生不完整輸出");
+    }
+    finally { CleanupTempDir(dir); }
+}
+
 static string CreateTempDir() =>
     Path.Combine(Path.GetTempPath(), $"PoliceImageToolkit-{Guid.NewGuid():N}");
 
@@ -478,4 +737,47 @@ static void AssertEqual<T>(T expected, T actual, string name) where T : IEquatab
 static void AssertTrue(bool condition, string message)
 {
     if (!condition) throw new InvalidOperationException(message);
+}
+
+sealed class RecordingIndexService : IOutputIndexService
+{
+    public List<OutputIndexEntry> Entries { get; } = [];
+    public bool DelayRemoval { get; init; }
+    public bool FailAppend { get; set; }
+    public TaskCompletionSource Removal { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+    public Task AppendEntriesAsync(string directory, IEnumerable<OutputIndexEntry> entries, CancellationToken cancellationToken = default)
+    { if (FailAppend) throw new IOException("simulated index failure"); Entries.AddRange(entries); return Task.CompletedTask; }
+    public Task RemoveEntriesAsync(string directory, IEnumerable<string> names, CancellationToken cancellationToken = default) => DelayRemoval ? Removal.Task : Task.CompletedTask;
+}
+sealed class DelayedVideoService(string directory) : IVideoService
+{
+    private readonly TaskCompletionSource<SnapshotResult> _completion = new(TaskCreationOptions.RunContinuationsAsynchronously);
+    public Task<SnapshotResult> SaveFrameSnapshotAsync(BitmapSource frame, TimeSpan position, string path, VideoSnapshotConfig config) => _completion.Task;
+    public void Complete()
+    {
+        string path = Path.Combine(directory, "001.png"); File.WriteAllText(path, "snapshot");
+        _completion.SetResult(new SnapshotResult(path, TimeSpan.Zero, 16, 16, 1));
+    }
+    public BitmapSource RenderFrameWithTimestamp(BitmapSource frame, TimeSpan timestamp, string title, bool includeMs) => frame;
+}
+sealed class ControlledImageService : IImageService
+{
+    public TaskCompletionSource Started { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+    public TaskCompletionSource Release { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+    public TaskCompletionSource SecondWave { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+    public System.Collections.Concurrent.ConcurrentBag<ImageConvertOptions> Options { get; } = [];
+    private int _count;
+    public async Task ConvertAsync(ImageTaskItem item, ImageConvertOptions options, CancellationToken ct = default)
+    {
+        Options.Add(options);
+        if (Interlocked.Increment(ref _count) == 1)
+        {
+            Started.TrySetResult(); await Release.Task;
+            Directory.CreateDirectory(options.OutputDirectory);
+            item.OutputPath = Path.Combine(options.OutputDirectory, "completed.jpg");
+            File.WriteAllText(item.OutputPath, "output");
+            item.Status = PoliceImageToolkit.Models.TaskStatus.Success;
+        }
+        else { SecondWave.TrySetResult(); await Task.Delay(Timeout.Infinite, ct); }
+    }
 }

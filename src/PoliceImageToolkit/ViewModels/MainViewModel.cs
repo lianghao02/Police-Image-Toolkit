@@ -37,7 +37,7 @@ public class MainViewModel : ViewModelBase
         CheckUpdateCommand = new RelayCommand(async _ => await ExecuteCheckUpdateAsync(), _ => !IsCheckingUpdate);
     }
 
-    public string AppTitle => $"警務影像轉檔與手機影片截圖工具箱 (Police-Image-Toolkit {CurrentVersionDisplay})";
+    public string AppTitle => $"手機圖片轉檔與錄影截圖 (Police Image Toolkit {CurrentVersionDisplay})";
 
     public int SelectedTabIndex
     {

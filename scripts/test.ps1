@@ -15,3 +15,7 @@ if ($LASTEXITCODE -ne 0) {
     throw "核心服務測試失敗，結束代碼：$LASTEXITCODE"
 }
 
+
+$indexProject = Join-Path $root 'tests\PoliceImageToolkit.IndexTests\PoliceImageToolkit.IndexTests.csproj'
+& $dotnet run --project $indexProject -c Release --nologo
+if ($LASTEXITCODE -ne 0) { throw "來源紀錄整合測試失敗，結束代碼：$LASTEXITCODE" }

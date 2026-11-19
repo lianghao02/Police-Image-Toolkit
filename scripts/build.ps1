@@ -20,8 +20,9 @@ if (Test-Path "$env:USERPROFILE\AppData\Local\Microsoft\dotnet\dotnet.exe") {
 }
 
 # 關閉可能佔用 dist/ 執行檔之既有進程
-Get-Process "PoliceImageToolkit" -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
-Start-Sleep -Milliseconds 500
+if (Get-Process "PoliceImageToolkit" -ErrorAction SilentlyContinue) {
+    throw "請先完成作業並關閉 Police Image Toolkit，再執行建置。"
+}
 
 Write-Output "=========================================================="
 Write-Output "Police-Image-Toolkit Single-File Publish Script"
@@ -39,7 +40,10 @@ $objDir = Join-Path $projectDir "obj"
 if (Test-Path $binDir) { Remove-Item $binDir -Recurse -Force -ErrorAction SilentlyContinue }
 if (Test-Path $objDir) { Remove-Item $objDir -Recurse -Force -ErrorAction SilentlyContinue }
 if (Test-Path $destination) {
-    Get-ChildItem -Path $destination -File | Remove-Item -Force -ErrorAction SilentlyContinue
+    foreach ($name in @('PoliceImageToolkit.exe', 'PoliceImageToolkit.pdb', 'SHA256SUMS.txt', 'GUIDE.txt', 'version.txt')) {
+        $previous = Join-Path $destination $name
+        if (Test-Path -LiteralPath $previous) { Remove-Item -LiteralPath $previous -Force }
+    }
 }
 
 $sw = [System.Diagnostics.Stopwatch]::StartNew()
@@ -69,7 +73,7 @@ $guidePath = Join-Path $destination "GUIDE.txt"
 $versionSrc = Join-Path $projectDir "version.txt"
 $versionDst = Join-Path $destination "version.txt"
 
-$appVersion = "v11.5.0"
+$appVersion = "v11.5.2"
 if (Test-Path $versionSrc) {
     Copy-Item -LiteralPath $versionSrc -Destination $versionDst -Force
     $readVer = (Get-Content -LiteralPath $versionSrc -Encoding UTF8 -Raw).Trim()

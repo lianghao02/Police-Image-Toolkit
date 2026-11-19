@@ -12,17 +12,13 @@ namespace PoliceImageToolkit.Views;
 
 public partial class VideoSnapshotView : UserControl
 {
-    // 介面寬度達此值時，右側改為「對照圖｜設定＋清單」雙欄，讓直式對照圖與清單都保有足夠高度。
-    private const double WideWorkspaceMinWidth = 1100;
-    // 窄版上下堆疊時右側的最低總高度；視窗較矮時改由外層 ScrollViewer 捲動，避免清單被擠到看不見。
-    private const double StackedWorkspaceMinHeight = 700;
-
     private readonly DispatcherTimer _timer;
     private readonly MediaPlayer _mediaPlayer;
     private readonly VideoDrawing _videoDrawing;
     private readonly DrawingImage _playerImage;
     private bool _isUserDraggingSlider = false;
-    private bool? _isWideWorkspace;
+    private int _seekGeneration;
+    private readonly DispatcherTimer _seekTimer = new() { Interval = TimeSpan.FromMilliseconds(200) };
 
     public VideoSnapshotView()
     {
@@ -50,108 +46,46 @@ public partial class VideoSnapshotView : UserControl
         };
         _timer.Tick += Timer_Tick;
 
+        _seekTimer.Tick += async (_, _) =>
+        {
+            int generation = _seekGeneration;
+            _seekTimer.Stop();
+            await Dispatcher.InvokeAsync(() => { }, DispatcherPriority.Render);
+            if (generation == _seekGeneration && ViewModel?.HasVideoLoaded == true)
+            {
+                ViewModel.CurrentPosition = _mediaPlayer.Position;
+                ViewModel.IsSeeking = false;
+            }
+        };
         DataContextChanged += VideoSnapshotView_DataContextChanged;
     }
 
     private VideoSnapshotViewModel? ViewModel => DataContext as VideoSnapshotViewModel;
 
-    private void UserControl_Loaded(object sender, RoutedEventArgs e)
-    {
-        UpdateRightWorkspaceLayout();
-    }
-
     private void UserControl_Unloaded(object sender, RoutedEventArgs e)
     {
+        _seekGeneration++;
         _timer.Stop();
-        _mediaPlayer.Stop();
+        _seekTimer.Stop();
         _mediaPlayer.Close();
+        if (ViewModel != null) { ViewModel.HasVideoLoaded = false; ViewModel.IsPlaying = false; }
     }
 
-    private void UserControl_SizeChanged(object sender, SizeChangedEventArgs e)
+    private void OpenLastSnapshot_Click(object sender, RoutedEventArgs e)
     {
-        UpdateRightWorkspaceLayout();
-    }
-
-    private void UpdateRightWorkspaceLayout()
-    {
-        bool useWideWorkspace = ActualWidth >= WideWorkspaceMinWidth;
-        if (_isWideWorkspace == useWideWorkspace)
+        var snapshot = ViewModel?.LastCapturedSnapshot;
+        if (snapshot == null) return;
+        try
         {
-            SyncRightWorkspaceHeight();
-            return;
+            var bitmap = new BitmapImage();
+            bitmap.BeginInit(); bitmap.CacheOption = BitmapCacheOption.OnLoad;
+            bitmap.UriSource = new Uri(snapshot.FilePath); bitmap.EndInit(); bitmap.Freeze();
+            var image = new Image { Source = bitmap, Stretch = Stretch.None };
+            var scroll = new ScrollViewer { Content = image, HorizontalScrollBarVisibility = ScrollBarVisibility.Auto, VerticalScrollBarVisibility = ScrollBarVisibility.Auto };
+            var window = new Window { Title = $"{ViewModel!.ComparisonSource}（原尺寸，可捲動）", Width = 900, Height = 700, Content = scroll, Owner = Window.GetWindow(this), WindowStartupLocation = WindowStartupLocation.CenterOwner };
+            window.ShowDialog();
         }
-
-        _isWideWorkspace = useWideWorkspace;
-
-        if (useWideWorkspace)
-        {
-            RightWorkspace.ColumnDefinitions[0].Width = new GridLength(1, GridUnitType.Star);
-            RightWorkspace.ColumnDefinitions[1].Width = new GridLength(1, GridUnitType.Star);
-            RightWorkspace.RowDefinitions[0].Height = GridLength.Auto;
-            RightWorkspace.RowDefinitions[1].Height = new GridLength(1, GridUnitType.Star);
-            RightWorkspace.RowDefinitions[2].Height = new GridLength(0);
-
-            Grid.SetColumn(CompareCard, 0);
-            Grid.SetColumnSpan(CompareCard, 1);
-            Grid.SetRow(CompareCard, 0);
-            Grid.SetRowSpan(CompareCard, 3);
-            CompareCard.Margin = new Thickness(0, 0, 8, 0);
-            ComparePreview.MinHeight = 300;
-            ComparePreview.Height = double.NaN;
-
-            Grid.SetColumn(SettingsCard, 1);
-            Grid.SetColumnSpan(SettingsCard, 1);
-            Grid.SetRow(SettingsCard, 0);
-            Grid.SetRowSpan(SettingsCard, 1);
-
-            Grid.SetColumn(EvidenceCard, 1);
-            Grid.SetColumnSpan(EvidenceCard, 1);
-            Grid.SetRow(EvidenceCard, 1);
-            Grid.SetRowSpan(EvidenceCard, 2);
-        }
-        else
-        {
-            RightWorkspace.ColumnDefinitions[0].Width = new GridLength(1, GridUnitType.Star);
-            RightWorkspace.ColumnDefinitions[1].Width = new GridLength(0);
-            RightWorkspace.RowDefinitions[0].Height = GridLength.Auto;
-            RightWorkspace.RowDefinitions[1].Height = GridLength.Auto;
-            RightWorkspace.RowDefinitions[2].Height = new GridLength(1, GridUnitType.Star);
-
-            Grid.SetColumn(CompareCard, 0);
-            Grid.SetColumnSpan(CompareCard, 2);
-            Grid.SetRow(CompareCard, 0);
-            Grid.SetRowSpan(CompareCard, 1);
-            CompareCard.Margin = new Thickness(0, 0, 0, 10);
-            ComparePreview.MinHeight = 0;
-            ComparePreview.Height = 170;
-
-            Grid.SetColumn(SettingsCard, 0);
-            Grid.SetColumnSpan(SettingsCard, 2);
-            Grid.SetRow(SettingsCard, 1);
-            Grid.SetRowSpan(SettingsCard, 1);
-
-            Grid.SetColumn(EvidenceCard, 0);
-            Grid.SetColumnSpan(EvidenceCard, 2);
-            Grid.SetRow(EvidenceCard, 2);
-            Grid.SetRowSpan(EvidenceCard, 1);
-        }
-
-        SyncRightWorkspaceHeight();
-    }
-
-    private void RightScroll_SizeChanged(object sender, SizeChangedEventArgs e)
-    {
-        SyncRightWorkspaceHeight();
-    }
-
-    private void SyncRightWorkspaceHeight()
-    {
-        // ScrollViewer 會以無限高度量測內容，需明確指定高度，星號列才能依可視高度分配。
-        double viewportHeight = RightScroll.ActualHeight;
-        if (viewportHeight <= 0) return;
-
-        double minimumHeight = _isWideWorkspace == true ? 0 : StackedWorkspaceMinHeight;
-        RightWorkspace.Height = Math.Max(viewportHeight, minimumHeight);
+        catch (Exception ex) { MessageBox.Show($"無法開啟截圖：{ex.Message}", "截圖預覽"); }
     }
 
     private void VideoSnapshotView_DataContextChanged(object sender, DependencyPropertyChangedEventArgs e)
@@ -163,6 +97,7 @@ public partial class VideoSnapshotView : UserControl
             oldVm.RequestPause -= Vm_RequestPause;
             oldVm.RequestSeek -= Vm_RequestSeek;
             oldVm.RequestCurrentFrame -= Vm_RequestCurrentFrame;
+            oldVm.RequestCurrentPosition -= Vm_RequestCurrentPosition;
             oldVm.RequestSnapshotVisualFeedback -= Vm_RequestSnapshotVisualFeedback;
         }
 
@@ -173,6 +108,7 @@ public partial class VideoSnapshotView : UserControl
             newVm.RequestPause += Vm_RequestPause;
             newVm.RequestSeek += Vm_RequestSeek;
             newVm.RequestCurrentFrame += Vm_RequestCurrentFrame;
+            newVm.RequestCurrentPosition += Vm_RequestCurrentPosition;
             newVm.RequestSnapshotVisualFeedback += Vm_RequestSnapshotVisualFeedback;
 
             if (!string.IsNullOrEmpty(newVm.VideoPath) && File.Exists(newVm.VideoPath))
@@ -184,8 +120,10 @@ public partial class VideoSnapshotView : UserControl
 
     private void Vm_RequestLoadVideo(string path)
     {
+        _seekGeneration++;
         _timer.Stop();
-        BtnPlayPause.Content = "▶ 播放";
+        _seekTimer.Stop();
+        BtnPlayPause.Content = "播放";
         _mediaPlayer.Stop();
         _mediaPlayer.Open(new Uri(path));
         // 預先啟動媒體管線解碼首幀；MediaOpened 會立即暫停於第 0 秒並通知 ViewModel。
@@ -198,7 +136,7 @@ public partial class VideoSnapshotView : UserControl
         _mediaPlayer.Play();
         _timer.Start();
         if (ViewModel != null) ViewModel.IsPlaying = true;
-        BtnPlayPause.Content = "⏸ 暫停";
+        BtnPlayPause.Content = "暫停";
     }
 
     private void Vm_RequestPause()
@@ -206,17 +144,23 @@ public partial class VideoSnapshotView : UserControl
         _mediaPlayer.Pause();
         _timer.Stop();
         if (ViewModel != null) ViewModel.IsPlaying = false;
-        BtnPlayPause.Content = "▶ 播放";
+        BtnPlayPause.Content = "播放";
     }
 
     private void Vm_RequestSeek(TimeSpan position)
     {
+        _seekGeneration++;
+        if (ViewModel != null) ViewModel.IsSeeking = true;
+        _seekTimer.Stop();
         _mediaPlayer.Position = position;
+        _seekTimer.Start();
         if (ViewModel != null)
         {
             ViewModel.CurrentPosition = position;
         }
     }
+
+    private TimeSpan Vm_RequestCurrentPosition() => _mediaPlayer.Position;
 
     private BitmapSource? Vm_RequestCurrentFrame()
     {
@@ -290,12 +234,16 @@ public partial class VideoSnapshotView : UserControl
             ? _mediaPlayer.NaturalDuration.TimeSpan
             : TimeSpan.Zero;
         ViewModel.MarkVideoOpened(duration);
+        ViewModel.IsSeeking = true;
+        _seekTimer.Start();
     }
 
     private void MediaPlayer_MediaFailed(object? sender, ExceptionEventArgs e)
     {
+        _seekGeneration++;
         _timer.Stop();
-        BtnPlayPause.Content = "▶ 播放";
+        _seekTimer.Stop();
+        BtnPlayPause.Content = "播放";
         _mediaPlayer.Close();
         ViewModel?.MarkVideoLoadFailed(e.ErrorException?.Message ?? "系統缺少對應解碼器");
     }
@@ -317,10 +265,6 @@ public partial class VideoSnapshotView : UserControl
     private void Slider_PreviewMouseUp(object sender, MouseButtonEventArgs e)
     {
         _isUserDraggingSlider = false;
-        if (ViewModel != null)
-        {
-            _mediaPlayer.Position = ViewModel.CurrentPosition;
-        }
     }
 
     private void UserControl_DragOver(object sender, DragEventArgs e)

@@ -9,7 +9,9 @@ public record SnapshotResult(
     int Width,
     int Height,
     long SizeBytes,
-    BitmapSource? Thumbnail = null
+    BitmapSource? Thumbnail = null,
+    BitmapSource? BottomStrip = null,
+    string? SourceFilePath = null
 );
 
 public interface IVideoService

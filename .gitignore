@@ -22,3 +22,6 @@ crash.log
 python_embed/
 python-embed/
 node_modules/
+
+# WPF temporary build projects
+*_wpftmp.csproj

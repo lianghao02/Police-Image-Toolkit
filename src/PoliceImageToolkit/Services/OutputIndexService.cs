@@ -75,6 +75,9 @@ public sealed class OutputIndexService : IOutputIndexService
         {
             Directory.CreateDirectory(fullDirectory);
             string indexPath = Path.Combine(fullDirectory, IndexFileName);
+            // 鎖檔保留在資料夾中，不刪除，避免另一程序鎖住已刪除檔案的競態。
+            using var processLock = await AcquireProcessLockAsync(
+                Path.Combine(fullDirectory, ".report_index.lock"), cancellationToken);
             var document = await ReadDocumentAsync(indexPath, cancellationToken);
             update(document);
             document.Schema = SchemaName;
@@ -95,6 +98,13 @@ public sealed class OutputIndexService : IOutputIndexService
         try
         {
             string json = await File.ReadAllTextAsync(indexPath, cancellationToken);
+            using var parsed = JsonDocument.Parse(json);
+            if (parsed.RootElement.ValueKind != JsonValueKind.Object ||
+                !parsed.RootElement.TryGetProperty("schema", out var schema) ||
+                schema.ValueKind != JsonValueKind.String || schema.GetString() != SchemaName ||
+                !parsed.RootElement.TryGetProperty("schema_version", out var version) ||
+                version.ValueKind != JsonValueKind.Number || !version.TryGetInt32(out int schemaVersion) || schemaVersion != CurrentSchemaVersion)
+                throw new InvalidDataException("既有來源紀錄格式或版本不受支援，已保留原檔。");
             var document = JsonSerializer.Deserialize<OutputIndexDocument>(json, JsonOptions);
             if (document is null || !string.Equals(document.Schema, SchemaName, StringComparison.Ordinal))
             {
@@ -107,6 +117,20 @@ public sealed class OutputIndexService : IOutputIndexService
         catch (JsonException ex)
         {
             throw new InvalidDataException("既有 report_index.json 無法讀取，未變更該索引。", ex);
+        }
+    }
+
+    private static async Task<FileStream> AcquireProcessLockAsync(string path, CancellationToken ct)
+    {
+        var elapsed = System.Diagnostics.Stopwatch.StartNew();
+        while (true)
+        {
+            ct.ThrowIfCancellationRequested();
+            try { return new FileStream(path, FileMode.OpenOrCreate, FileAccess.ReadWrite, FileShare.None); }
+            catch (IOException) when (elapsed.Elapsed < TimeSpan.FromSeconds(10))
+            {
+                await Task.Delay(50, ct);
+            }
         }
     }
 

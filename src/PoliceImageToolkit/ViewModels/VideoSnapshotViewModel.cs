@@ -22,7 +22,7 @@ public class VideoSnapshotViewModel : ViewModelBase
     private bool _isPlaying = false;
     private bool _hasVideoLoaded = false;
     private bool _isLoadingVideo = false;
-    private string _statusMessage = "請拖曳手機影片 (MOV/MP4) 或點擊「開啟影片」";
+    private string _statusMessage = "請拖入手機螢幕錄影，再選擇儲存位置與截圖設定。";
 
     // 快照設定
     private string _outputDirectory = string.Empty;
@@ -30,23 +30,29 @@ public class VideoSnapshotViewModel : ViewModelBase
     private int _jpgQuality = 95;
     private bool _addTimestampOverlay = false;
     private bool _includeMilliseconds = true;
-    private bool _autoCreateSubfolder = true;
     private string _casePrefix = string.Empty;
 
     // 上頁末行對照圖
     private SnapshotResult? _lastCapturedSnapshot;
     private bool _isCapturing = false;
+    private bool _isMutating;
+    private bool _isSeeking;
+    private long _videoSession;
+    private string _indexMessage = string.Empty;
+    private readonly Action<string> _deleteFile;
 
     public VideoSnapshotViewModel(
         IVideoService videoService,
         IOutputIndexService outputIndexService,
         UserPreferences? initialPreferences = null,
-        Action? onPreferencesChanged = null)
+        Action? onPreferencesChanged = null,
+        Action<string>? deleteFile = null)
     {
+        _deleteFile = deleteFile ?? MoveToRecoveryFolder;
         _videoService = videoService;
         _outputIndexService = outputIndexService;
         _onPreferencesChanged = onPreferencesChanged;
-        Snapshots = new ObservableCollection<SnapshotResult>();
+        Snapshots.CollectionChanged += (_, _) => CommandManager.InvalidateRequerySuggested();
 
         if (initialPreferences != null)
         {
@@ -58,34 +64,139 @@ public class VideoSnapshotViewModel : ViewModelBase
             _includeMilliseconds = initialPreferences.VideoIncludeMilliseconds;
         }
 
-        OpenVideoCommand = new RelayCommand(_ => ExecuteOpenVideo());
+        OpenVideoCommand = new RelayCommand(_ => ExecuteOpenVideo(), _ => !_isMutating);
         PlayPauseCommand = new RelayCommand(_ => ExecutePlayPause(), _ => HasVideoLoaded);
         StepForwardCommand = new RelayCommand(_ => StepTime(0.1), _ => HasVideoLoaded);
         StepBackwardCommand = new RelayCommand(_ => StepTime(-0.1), _ => HasVideoLoaded);
         StepForward1sCommand = new RelayCommand(_ => StepTime(1.0), _ => HasVideoLoaded);
         StepBackward1sCommand = new RelayCommand(_ => StepTime(-1.0), _ => HasVideoLoaded);
         SeekCommand = new RelayCommand(ExecuteSeek, _ => HasVideoLoaded);
-        BrowseOutputDirectoryCommand = new RelayCommand(_ => ExecuteBrowseOutputDirectory());
-        OpenOutputFolderCommand = new RelayCommand(_ => ExecuteOpenOutputFolder());
-        ClearSnapshotsCommand = new RelayCommand(_ => ExecuteClearSnapshots(), _ => Snapshots.Count > 0);
-        DeleteSnapshotFilesCommand = new RelayCommand(async _ => await ExecuteDeleteSnapshotFilesAsync(), _ => Snapshots.Count > 0);
-        UndoLastCaptureCommand = new RelayCommand(async _ => await ExecuteUndoLastCaptureAsync(), _ => Snapshots.Count > 0);
-        CaptureSnapshotCommand = new RelayCommand(async _ => await CaptureSnapshotAsync(), _ => HasVideoLoaded && !_isCapturing);
+        RetryIndexCommand = new RelayCommand(async _ => await RetrySnapshotIndexAsync(), _ => (Snapshots.Count > 0 || _pendingRemovals.Any(IsCurrentSource) || _pendingIndexSnapshots.Any(IsCurrentSource)) && !IsBusy);
+        BrowseOutputDirectoryCommand = new RelayCommand(_ => ExecuteBrowseOutputDirectory(), _ => !IsBusy);
+        OpenOutputFolderCommand = new RelayCommand(_ => ExecuteOpenOutputFolder(), _ => !string.IsNullOrWhiteSpace(VideoPath));
+        ClearSnapshotsCommand = new RelayCommand(_ => ExecuteClearSnapshots(), _ => Snapshots.Count > 0 && !IsBusy);
+        DeleteSnapshotFilesCommand = new RelayCommand(async _ => await ExecuteDeleteSnapshotFilesAsync(), _ => Snapshots.Count > 0 && !IsBusy);
+        RestoreLastRemovedCommand = new RelayCommand(async _ => await RestoreLastRemovedAsync(), _ => !IsBusy && FindRestorableIndex() >= 0);
+        UndoLastCaptureCommand = new RelayCommand(async _ => await ExecuteUndoLastCaptureAsync(), _ => Snapshots.Count > 0 && !IsBusy);
+        ClearPreviousComparisonCommand = new RelayCommand(_ =>
+        {
+            _previousSegmentSnapshot = null;
+            RefreshComparison();
+        }, _ => !IsBusy && _previousSegmentSnapshot != null);
+        CaptureSnapshotCommand = new RelayCommand(async _ => await CaptureSnapshotAsync(), _ => HasVideoLoaded && !IsBusy && !IsSeeking);
     }
 
-    public ObservableCollection<SnapshotResult> Snapshots { get; }
+    public bool IsBusy => _isCapturing || _isMutating;
+    public bool CanEditSettings => !IsBusy;
+    public bool IsSeeking
+    {
+        get => _isSeeking;
+        set { if (SetProperty(ref _isSeeking, value)) CommandManager.InvalidateRequerySuggested(); }
+    }
+    public string IndexMessage
+    {
+        get => _indexMessage;
+        private set
+        {
+            SetProperty(ref _indexMessage, value);
+            if (_segments.TryGetValue(VideoPath, out var state)) state.IndexMessage = value;
+        }
+    }
+    public string EffectiveOutputDirectory => string.IsNullOrWhiteSpace(VideoPath)
+        ? "開啟手機錄影後顯示本段儲存位置"
+        : SnapshotOutputDirectory.Resolve(string.IsNullOrWhiteSpace(OutputDirectory)
+            ? Path.GetDirectoryName(VideoPath)! : OutputDirectory, VideoPath);
+    public bool IsPreviousSegmentComparison => LastCapturedSnapshot != null &&
+        !string.Equals(LastCapturedSnapshot.SourceFilePath, VideoPath, StringComparison.OrdinalIgnoreCase);
+    public string ComparisonTitle => IsPreviousSegmentComparison
+        ? "上一段最後截圖 · 底部文字對照" : "本段上一張截圖 · 底部文字對照";
+    public string ComparisonSource => LastCapturedSnapshot == null ? ""
+        : $"{Path.GetFileName(LastCapturedSnapshot.SourceFilePath)} · {LastCapturedSnapshot.Timestamp:hh\\:mm\\:ss\\.fff}";
+    public ICommand ClearPreviousComparisonCommand { get; }
+    public ICommand RetryIndexCommand { get; }
+    public ICommand RestoreLastRemovedCommand { get; }
+    private readonly Dictionary<string, string> _recoveryFiles = new(StringComparer.OrdinalIgnoreCase);
+    private readonly List<(SnapshotResult Snapshot, string RecoveryPath)> _removedSnapshots = [];
+
+    private void MoveToRecoveryFolder(string path)
+    {
+        string recoveryDirectory = Path.Combine(Path.GetDirectoryName(path)!, ".pit-recovery");
+        Directory.CreateDirectory(recoveryDirectory);
+        string recoveryPath = Path.Combine(recoveryDirectory, $"{Guid.NewGuid():N}_{Path.GetFileName(path)}");
+        File.Move(path, recoveryPath, overwrite: false);
+        _recoveryFiles[path] = recoveryPath;
+    }
+
+    public async Task RestoreLastRemovedAsync()
+    {
+        int restorableIndex = FindRestorableIndex();
+        if (IsBusy || restorableIndex < 0) return;
+        var removed = _removedSnapshots[restorableIndex];
+        var snapshot = removed.Snapshot;
+        string recoveryPath = removed.RecoveryPath;
+        _isMutating = true; NotifyBusy();
+        try
+        {
+            // 若流水號已被新截圖使用，拒絕還原並保留回收檔，絕不覆寫。
+            File.Move(recoveryPath, snapshot.FilePath, overwrite: false);
+            _removedSnapshots.Remove(removed);
+            _pendingRemovals.RemoveAll(x => x.FilePath == snapshot.FilePath);
+            Snapshots.Insert(0, snapshot);
+            RefreshComparison();
+            try
+            {
+                await _outputIndexService.AppendEntriesAsync(Path.GetDirectoryName(snapshot.FilePath)!,
+                    [new OutputIndexEntry(Path.GetFileName(snapshot.FilePath), Path.GetFileName(snapshot.SourceFilePath ?? "unknown"),
+                    "video_snapshot", snapshot.Timestamp.ToString("hh\\:mm\\:ss\\.fff"), snapshot.Width, snapshot.Height)]);
+                IndexMessage = SuccessfulIndexMessage(VideoPath);
+            }
+            catch { _pendingIndexSnapshots.Add(snapshot); IndexMessage = "圖片已還原；來源紀錄更新失敗，請重試來源紀錄。"; }
+            StatusMessage = $"已還原 {Path.GetFileName(snapshot.FilePath)}";
+        }
+        catch (Exception ex) { StatusMessage = $"無法還原，回收檔仍保留（請確認原位置沒有同名檔）：{ex.Message}"; }
+        finally { _isMutating = false; NotifyBusy(); }
+    }
+    private void NotifyBusy()
+    {
+        OnPropertyChanged(nameof(IsBusy));
+        OnPropertyChanged(nameof(CanEditSettings));
+        CommandManager.InvalidateRequerySuggested();
+    }
+    private SnapshotResult? PreviousForCurrentVideo() => Snapshots.FirstOrDefault(x =>
+        string.Equals(x.SourceFilePath, VideoPath, StringComparison.OrdinalIgnoreCase));
+
+    private sealed class SegmentState
+    {
+        public ObservableCollection<SnapshotResult> Snapshots { get; } = [];
+        public string Prefix { get; set; } = string.Empty;
+        public string IndexMessage { get; set; } = string.Empty;
+        public string OutputRoot { get; set; } = string.Empty;
+    }
+    private readonly Dictionary<string, SegmentState> _segments = new(StringComparer.OrdinalIgnoreCase);
+    private ObservableCollection<SnapshotResult> _snapshots = [];
+    private SnapshotResult? _previousSegmentSnapshot;
+    public ObservableCollection<SnapshotResult> Snapshots
+    {
+        get => _snapshots;
+        private set => SetProperty(ref _snapshots, value);
+    }
+    private bool IsCurrentSource(SnapshotResult snapshot) =>
+        string.Equals(snapshot.SourceFilePath ?? string.Empty, VideoPath, StringComparison.OrdinalIgnoreCase);
+    private int FindRestorableIndex() => _removedSnapshots.FindLastIndex(x => IsCurrentSource(x.Snapshot));
+    private void RefreshComparison() => LastCapturedSnapshot = PreviousForCurrentVideo() ?? _previousSegmentSnapshot;
 
     public event Action<string>? RequestLoadVideo;
     public event Action? RequestPlay;
     public event Action? RequestPause;
     public event Action<TimeSpan>? RequestSeek;
     public event Func<BitmapSource?>? RequestCurrentFrame;
+    public event Func<TimeSpan>? RequestCurrentPosition;
     public event Action? RequestSnapshotVisualFeedback; // 截圖視覺閃爍回饋
 
     public string VideoPath
     {
         get => _videoPath;
-        set => SetProperty(ref _videoPath, value);
+        set { if (SetProperty(ref _videoPath, value)) OnPropertyChanged(nameof(EffectiveOutputDirectory)); }
     }
 
     public string VideoTitle
@@ -170,7 +281,7 @@ public class VideoSnapshotViewModel : ViewModelBase
     public string OutputDirectory
     {
         get => _outputDirectory;
-        set => SetProperty(ref _outputDirectory, value);
+        set { if (SetProperty(ref _outputDirectory, value)) OnPropertyChanged(nameof(EffectiveOutputDirectory)); }
     }
 
     public string OutputFormat
@@ -221,12 +332,6 @@ public class VideoSnapshotViewModel : ViewModelBase
         }
     }
 
-    public bool AutoCreateSubfolder
-    {
-        get => _autoCreateSubfolder;
-        set => SetProperty(ref _autoCreateSubfolder, value);
-    }
-
     public string CasePrefix
     {
         get => _casePrefix;
@@ -241,6 +346,10 @@ public class VideoSnapshotViewModel : ViewModelBase
             if (SetProperty(ref _lastCapturedSnapshot, value))
             {
                 OnPropertyChanged(nameof(HasLastCapturedSnapshot));
+                OnPropertyChanged(nameof(IsPreviousSegmentComparison));
+                OnPropertyChanged(nameof(ComparisonTitle));
+                OnPropertyChanged(nameof(ComparisonSource));
+                CommandManager.InvalidateRequerySuggested();
             }
         }
     }
@@ -264,6 +373,23 @@ public class VideoSnapshotViewModel : ViewModelBase
     public void LoadVideo(string path)
     {
         if (!File.Exists(path)) return;
+        if (_isMutating) { StatusMessage = "正在更新目前影片的截圖，完成後即可換片。"; return; }
+        path = Path.GetFullPath(path);
+        bool differentSource = !string.Equals(VideoPath, path, StringComparison.OrdinalIgnoreCase);
+        var previousLast = differentSource ? PreviousForCurrentVideo() : _previousSegmentSnapshot;
+        if (_segments.TryGetValue(VideoPath, out var oldState))
+        {
+            oldState.Prefix = CasePrefix;
+            oldState.OutputRoot = OutputDirectory;
+        }
+        if (!_segments.TryGetValue(path, out var nextState))
+        {
+            nextState = new SegmentState { OutputRoot = OutputDirectory };
+            nextState.Snapshots.CollectionChanged += (_, _) => CommandManager.InvalidateRequerySuggested();
+            _segments[path] = nextState;
+        }
+        _videoSession++;
+        IsSeeking = false;
 
         if (IsPlaying) RequestPause?.Invoke();
         IsPlaying = false;
@@ -274,8 +400,16 @@ public class VideoSnapshotViewModel : ViewModelBase
         VideoTitle = Path.GetFileName(path);
         Duration = TimeSpan.Zero;
         CurrentPosition = TimeSpan.Zero;
-        // 換片後清除上一部影片的對照圖，避免以他片末行判斷是否漏截；已擷取清單保留。
-        LastCapturedSnapshot = null;
+        // 每段保留自己的工作清單；上一段對照單獨標示，不能成為本段移除的目標。
+        Snapshots = nextState.Snapshots;
+        CasePrefix = nextState.Prefix;
+        OutputDirectory = nextState.OutputRoot;
+        _previousSegmentSnapshot = previousLast;
+        RefreshComparison();
+        OnPropertyChanged(nameof(ComparisonTitle));
+        OnPropertyChanged(nameof(IsPreviousSegmentComparison));
+        OnPropertyChanged(nameof(ComparisonSource));
+        IndexMessage = nextState.IndexMessage;
         StatusMessage = $"正在載入影片：{VideoTitle}...";
 
         // 由 View 實際指定播放器來源；按鈕開檔與拖曳開檔共用同一路徑。
@@ -288,7 +422,7 @@ public class VideoSnapshotViewModel : ViewModelBase
         Duration = duration;
         CurrentPosition = TimeSpan.Zero;
         HasVideoLoaded = true;
-        StatusMessage = $"已載入影片：{VideoTitle} (按空白鍵 Space 擷取，←/→ 鍵微調)";
+        StatusMessage = $"已載入影片：{VideoTitle} （Space 儲存畫面，←／→ 移動 0.1 秒）";
     }
 
     public void MarkVideoLoadFailed(string reason)
@@ -298,15 +432,15 @@ public class VideoSnapshotViewModel : ViewModelBase
         IsPlaying = false;
         Duration = TimeSpan.Zero;
         CurrentPosition = TimeSpan.Zero;
-        StatusMessage = $"無法播放影片 {VideoTitle}：{reason}（可先以其他播放器確認格式，或轉為 MP4 H.264 後再載入）";
+        StatusMessage = $"無法載入手機錄影 {VideoTitle}：{reason}（可先以其他播放器確認格式，或轉為 MP4 H.264 後再載入）";
     }
 
     private void ExecuteOpenVideo()
     {
         var dialog = new OpenFileDialog
         {
-            Filter = "手機影片 (*.mov;*.mp4;*.m4v;*.avi;*.mkv;*.webm)|*.mov;*.mp4;*.m4v;*.avi;*.mkv;*.webm|所有檔案 (*.*)|*.*",
-            Title = "選擇手機影片 (支援 iPhone MOV / Android MP4)"
+            Filter = "影片 (*.mov;*.mp4;*.m4v;*.avi;*.mkv;*.webm)|*.mov;*.mp4;*.m4v;*.avi;*.mkv;*.webm|所有檔案 (*.*)|*.*",
+            Title = "選擇手機螢幕錄影（支援格式依系統解碼器而定）"
         };
 
         if (dialog.ShowDialog() == true)
@@ -363,21 +497,27 @@ public class VideoSnapshotViewModel : ViewModelBase
 
     public async Task<SnapshotResult?> CaptureSnapshotAsync()
     {
-        if (!HasVideoLoaded || RequestCurrentFrame == null || _isCapturing) return null;
+        if (!HasVideoLoaded || RequestCurrentFrame == null || IsBusy || IsSeeking) return null;
 
         _isCapturing = true;
+        NotifyBusy();
+        string capturedVideoPath = VideoPath;
+        long capturedSession = _videoSession;
+        var capturedSnapshots = Snapshots;
+        IndexMessage = string.Empty;
         try
         {
-            // 1. 立即擷取當前影格緩衝區
+            if (IsPlaying) { RequestPause?.Invoke(); IsPlaying = false; }
+            TimeSpan capturePos = RequestCurrentPosition?.Invoke() ?? CurrentPosition;
+            StatusMessage = "正在儲存截圖…";
+            // 1. 擷取暫停後的畫面；時間為播放器回報位置，並非影格 PTS。
             var frame = RequestCurrentFrame.Invoke();
             if (frame == null)
             {
-                StatusMessage = "截圖失敗：影片視訊軌尚未就緒或無法取得畫面緩衝區。";
+                StatusMessage = "截圖未儲存：尚無可用畫面，請等待影片載入或移動播放位置後重試。";
                 return null;
             }
 
-            // 2. 觸發介面視覺快門閃爍回饋
-            RequestSnapshotVisualFeedback?.Invoke();
 
             var config = new VideoSnapshotConfig
             {
@@ -391,110 +531,148 @@ public class VideoSnapshotViewModel : ViewModelBase
                 CasePrefix = CasePrefix
             };
 
-            TimeSpan capturePos = CurrentPosition;
 
             // 3. 背景非同步存檔，不阻礙後續移動與播放
-            var res = await _videoService.SaveFrameSnapshotAsync(frame, capturePos, VideoPath, config);
+            var res = await _videoService.SaveFrameSnapshotAsync(frame, capturePos, capturedVideoPath, config);
+            res = res with { SourceFilePath = capturedVideoPath };
             string indexStatus;
             try
             {
                 await _outputIndexService.AppendEntriesAsync(Path.GetDirectoryName(res.FilePath)!,
                 [new OutputIndexEntry(
                     Path.GetFileName(res.FilePath),
-                    Path.GetFileName(VideoPath),
+                    Path.GetFileName(capturedVideoPath),
                     "video_snapshot",
                     res.Timestamp.ToString("hh\\:mm\\:ss\\.fff"),
                     res.Width,
                     res.Height)]);
-                indexStatus = "；追溯索引已更新";
+                indexStatus = SuccessfulIndexMessage(capturedVideoPath);
             }
             catch
             {
-                indexStatus = "；追溯索引未更新（截圖已保留）";
+                _pendingIndexSnapshots.Add(res);
+                indexStatus = "來源紀錄更新失敗；截圖已保留，請按「重試來源紀錄」。";
             }
 
             // 4. 更新 UI 與「上頁末行對照圖」
             RunOnUIThread(() =>
             {
-                Snapshots.Insert(0, res);
-                LastCapturedSnapshot = res;
-                StatusMessage = $"📸 已擷取證物：{Path.GetFileName(res.FilePath)} (⏱ {res.Timestamp:hh\\:mm\\:ss\\.fff}){indexStatus} - 可繼續按 → 移動或 Space 截圖";
+                capturedSnapshots.Insert(0, res);
+                if (_segments.TryGetValue(capturedVideoPath, out var state)) state.IndexMessage = indexStatus;
+                if (capturedSession == _videoSession)
+                {
+                    LastCapturedSnapshot = res;
+                    IndexMessage = string.IsNullOrEmpty(indexStatus) ? SuccessfulIndexMessage(VideoPath) : indexStatus;
+                    StatusMessage = $"已儲存 {Path.GetFileName(res.FilePath)}（{res.Width} × {res.Height}）";
+                    RequestSnapshotVisualFeedback?.Invoke();
+                }
+
             });
 
             return res;
         }
         catch (Exception ex)
         {
-            StatusMessage = $"截圖失敗: {ex.Message}";
+            if (capturedSession == _videoSession) StatusMessage = $"截圖未儲存：{ex.Message}。請檢查輸出位置後重試。";
             return null;
         }
         finally
         {
             _isCapturing = false;
-            CommandManager.InvalidateRequerySuggested();
+            NotifyBusy();
         }
     }
 
     public async Task ExecuteUndoLastCaptureAsync()
     {
-        if (Snapshots.Count == 0) return;
-
+        if (IsBusy || Snapshots.Count == 0) return;
+        _isMutating = true;
+        NotifyBusy();
         var last = Snapshots[0];
-
         try
         {
-            if (File.Exists(last.FilePath))
+            if (File.Exists(last.FilePath)) _deleteFile(last.FilePath);
+            if (File.Exists(last.FilePath)) throw new IOException("檔案仍存在，未移除清單項目。");
+            if (_recoveryFiles.Remove(last.FilePath, out string? recoveryPath)) _removedSnapshots.Add((last, recoveryPath));
+            _pendingIndexSnapshots.RemoveAll(x => x.FilePath == last.FilePath);
+            Snapshots.Remove(last);
+            RefreshComparison();
+            try
             {
-                File.Delete(last.FilePath);
+                await _outputIndexService.RemoveEntriesAsync(Path.GetDirectoryName(last.FilePath)!, [Path.GetFileName(last.FilePath)]);
+                IndexMessage = SuccessfulIndexMessage(VideoPath);
             }
-
-            if (File.Exists(last.FilePath))
-            {
-                StatusMessage = $"無法刪除截圖，檔案仍保留於：{last.FilePath}";
-                return;
-            }
+            catch { IndexMessage = "刪除紀錄尚未同步，請按「重試來源紀錄」。"; _pendingRemovals.Add(last); }
+            StatusMessage = $"已移至回收區：{Path.GetFileName(last.FilePath)}。按「還原本段最近移除」可復原；回收檔保留在輸出資料夾的 .pit-recovery 子資料夾。";
         }
-        catch (Exception ex)
-        {
-            StatusMessage = $"無法刪除截圖，清單已保留：{ex.Message}";
-            return;
-        }
+        catch (Exception ex) { StatusMessage = $"無法移至回收區，清單已保留：{ex.Message}"; }
+        finally { _isMutating = false; NotifyBusy(); }
+    }
 
-        string indexStatus = string.Empty;
+    private string SuccessfulIndexMessage(string sourcePath) =>
+        _pendingIndexSnapshots.Concat(_pendingRemovals).Any(x =>
+            string.Equals(x.SourceFilePath ?? string.Empty, sourcePath, StringComparison.OrdinalIgnoreCase))
+        ? "本次來源紀錄已更新；本段仍有紀錄未同步，請重試來源紀錄。"
+        : "來源紀錄已更新";
+
+    private readonly List<SnapshotResult> _pendingRemovals = [];
+    private readonly List<SnapshotResult> _pendingIndexSnapshots = [];
+    public async Task RetrySnapshotIndexAsync()
+    {
+        if (IsBusy) return;
+        _isMutating = true;
+        NotifyBusy();
         try
         {
-            await _outputIndexService.RemoveEntriesAsync(Path.GetDirectoryName(last.FilePath)!, [Path.GetFileName(last.FilePath)]);
+            foreach (var removed in _pendingRemovals.Where(IsCurrentSource).ToArray())
+            {
+                await _outputIndexService.RemoveEntriesAsync(Path.GetDirectoryName(removed.FilePath)!, [Path.GetFileName(removed.FilePath)]);
+                _pendingRemovals.Remove(removed);
+            }
+            foreach (var group in Snapshots.Concat(_pendingIndexSnapshots.Where(IsCurrentSource)).DistinctBy(x => x.FilePath).Where(x => !string.IsNullOrEmpty(x.SourceFilePath) && File.Exists(x.FilePath))
+                .GroupBy(x => Path.GetDirectoryName(x.FilePath)!))
+                await _outputIndexService.AppendEntriesAsync(group.Key, group.Select(x => new OutputIndexEntry(
+                    Path.GetFileName(x.FilePath), Path.GetFileName(x.SourceFilePath!), "video_snapshot",
+                    x.Timestamp.ToString("hh\\:mm\\:ss\\.fff"), x.Width, x.Height)));
+            _pendingIndexSnapshots.RemoveAll(x => IsCurrentSource(x));
+            IndexMessage = SuccessfulIndexMessage(VideoPath);
         }
-        catch
-        {
-            indexStatus = "；追溯索引未更新";
-        }
-
-        Snapshots.RemoveAt(0);
-        LastCapturedSnapshot = Snapshots.FirstOrDefault();
-        StatusMessage = $"已復原/刪除上一頁截圖：{Path.GetFileName(last.FilePath)}{indexStatus}";
+        catch (Exception ex) { IndexMessage = $"來源紀錄更新失敗：{ex.Message}"; }
+        finally { _isMutating = false; NotifyBusy(); }
     }
 
     private void ExecuteClearSnapshots()
     {
+        if (IsBusy) return;
         int count = Snapshots.Count;
         Snapshots.Clear();
-        LastCapturedSnapshot = null;
-        StatusMessage = $"已清空本次截圖清單（保留磁碟上的 {count} 個檔案）。";
+        RefreshComparison();
+        StatusMessage = $"已清空本段截圖清單（保留磁碟上的 {count} 個檔案與其他影片清單）。";
     }
 
     private async Task ExecuteDeleteSnapshotFilesAsync()
     {
+        if (IsBusy) return;
         int requestedCount = Snapshots.Count;
         var choice = System.Windows.MessageBox.Show(
-            $"確定要刪除本次清單中的 {requestedCount} 個截圖檔案嗎？\n\n" +
-            "此動作不可復原，只會刪除目前清單中的衍生截圖，不會刪除來源影片。",
-            "刪除本次截圖檔案",
+            $"確定將目前影片「{VideoTitle}」的 {requestedCount} 個截圖移至回收區？\n\n" +
+            "按「還原本段最近移除」可復原；回收檔保留在輸出資料夾的 .pit-recovery 子資料夾。來源影片會保留。",
+            "將目前影片的截圖移至回收區",
             System.Windows.MessageBoxButton.YesNo,
             System.Windows.MessageBoxImage.Warning);
 
         if (choice != System.Windows.MessageBoxResult.Yes) return;
 
+        await MoveCurrentSnapshotsToRecoveryAsync();
+    }
+
+    public async Task MoveCurrentSnapshotsToRecoveryAsync()
+    {
+        if (IsBusy || Snapshots.Count == 0) return;
+        _isMutating = true;
+        NotifyBusy();
+        try
+        {
         int deletedCount = 0;
         int missingCount = 0;
         int failedCount = 0;
@@ -506,7 +684,8 @@ public class VideoSnapshotViewModel : ViewModelBase
             {
                 if (File.Exists(snapshot.FilePath))
                 {
-                    File.Delete(snapshot.FilePath);
+                    _deleteFile(snapshot.FilePath);
+                    if (File.Exists(snapshot.FilePath)) throw new IOException("檔案仍存在");
                     deletedCount++;
                 }
                 else
@@ -522,8 +701,13 @@ public class VideoSnapshotViewModel : ViewModelBase
             }
         }
 
-        foreach (var snapshot in removable) Snapshots.Remove(snapshot);
-        LastCapturedSnapshot = Snapshots.FirstOrDefault();
+        foreach (var snapshot in removable)
+        {
+            if (_recoveryFiles.Remove(snapshot.FilePath, out string? recoveryPath)) _removedSnapshots.Add((snapshot, recoveryPath));
+            _pendingIndexSnapshots.RemoveAll(x => x.FilePath == snapshot.FilePath);
+            Snapshots.Remove(snapshot);
+        }
+        RefreshComparison();
 
         string indexStatus = string.Empty;
         try
@@ -535,12 +719,17 @@ public class VideoSnapshotViewModel : ViewModelBase
         }
         catch
         {
-            indexStatus = "；追溯索引未更新";
+            indexStatus = "；刪除紀錄尚未同步，請重試來源紀錄";
+            _pendingRemovals.AddRange(removable);
         }
 
+        IndexMessage = string.IsNullOrEmpty(indexStatus) ? SuccessfulIndexMessage(VideoPath) : indexStatus;
         StatusMessage = failedCount == 0
-            ? $"已刪除 {deletedCount} 個截圖檔案；另有 {missingCount} 個檔案原本不存在。{indexStatus}"
-            : $"已刪除 {deletedCount} 個截圖檔案；{failedCount} 個檔案無法刪除並保留在清單中。{indexStatus}";
+            ? $"已移至回收區 {deletedCount} 個截圖；另有 {missingCount} 個檔案原本不存在。{indexStatus}"
+            : $"已移至回收區 {deletedCount} 個截圖；{failedCount} 個檔案無法刪除並保留在清單中。{indexStatus}";
+    }
+
+        finally { _isMutating = false; NotifyBusy(); }
     }
 
     private void ExecuteBrowseOutputDirectory()
@@ -558,24 +747,18 @@ public class VideoSnapshotViewModel : ViewModelBase
 
     private void ExecuteOpenOutputFolder()
     {
-        string? capturedDirectory = Snapshots.FirstOrDefault() is { } snapshot
-            ? Path.GetDirectoryName(snapshot.FilePath)
-            : null;
-        string? configuredSnapshotDirectory = !string.IsNullOrWhiteSpace(VideoPath) && !string.IsNullOrWhiteSpace(OutputDirectory)
-            ? Path.Combine(OutputDirectory, $"{Path.GetFileNameWithoutExtension(VideoPath)}_Snapshots")
-            : null;
-        string dir = capturedDirectory
-            ?? configuredSnapshotDirectory
-            ?? (!string.IsNullOrWhiteSpace(VideoPath) ? Path.Combine(Path.GetDirectoryName(VideoPath) ?? string.Empty, $"{Path.GetFileNameWithoutExtension(VideoPath)}_Snapshots") : null)
-            ?? Environment.GetFolderPath(Environment.SpecialFolder.Desktop);
+        if (string.IsNullOrWhiteSpace(VideoPath)) return;
+        string dir = EffectiveOutputDirectory;
 
-        if (Directory.Exists(dir))
+        try
         {
+            Directory.CreateDirectory(dir);
             Process.Start(new ProcessStartInfo
             {
                 FileName = dir,
                 UseShellExecute = true
             });
         }
+        catch (Exception ex) { StatusMessage = $"無法開啟輸出資料夾：{ex.Message}"; }
     }
 }

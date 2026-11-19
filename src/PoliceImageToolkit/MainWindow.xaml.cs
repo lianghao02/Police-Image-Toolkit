@@ -11,6 +11,14 @@ public partial class MainWindow : Window
     {
         InitializeComponent();
         PreviewKeyDown += MainWindow_PreviewKeyDown;
+        Loaded += (_, _) =>
+        {
+            var area = SystemParameters.WorkArea;
+            MinWidth = Math.Min(MinWidth, area.Width);
+            MinHeight = Math.Min(MinHeight, area.Height);
+            MaxWidth = area.Width; MaxHeight = area.Height;
+            Width = Math.Min(Width, area.Width); Height = Math.Min(Height, area.Height);
+        };
     }
 
     private MainViewModel? ViewModel => DataContext as MainViewModel;
@@ -29,11 +37,12 @@ public partial class MainWindow : Window
             return;
         }
 
-        if (Keyboard.FocusedElement is Button && e.Key is Key.Space or Key.Return)
+        if (Keyboard.FocusedElement is Button && e.Key == Key.Return)
         {
             return;
         }
 
+        if (Keyboard.Modifiers != ModifierKeys.None || e.IsRepeat) return;
         // 僅在影片截圖分頁時啟用快捷鍵
         if (TabVideo.IsChecked == true && ViewModel?.VideoSnapshot != null)
         {

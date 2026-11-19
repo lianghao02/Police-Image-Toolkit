@@ -24,11 +24,9 @@ public class VideoService : IVideoService
                 ? Path.GetDirectoryName(videoFilePath) ?? Environment.GetFolderPath(Environment.SpecialFolder.Desktop)
                 : config.OutputDirectory;
 
-            string videoName = Path.GetFileNameWithoutExtension(videoFilePath);
-
             if (config.AutoCreateSubfolder)
             {
-                outDir = Path.Combine(outDir, $"{videoName}_Snapshots");
+                outDir = SnapshotOutputDirectory.Resolve(outDir, videoFilePath);
             }
 
             if (!Directory.Exists(outDir))
@@ -75,13 +73,25 @@ public class VideoService : IVideoService
                 thumb = scaled;
             }
 
+            int stripHeight = Math.Max(1, processedBitmap.PixelHeight / 4);
+            BitmapSource strip = new CroppedBitmap(processedBitmap,
+                new Int32Rect(0, processedBitmap.PixelHeight - stripHeight, processedBitmap.PixelWidth, stripHeight));
+            if (strip.PixelWidth > 1000)
+            {
+                double stripScale = 1000.0 / strip.PixelWidth;
+                strip = new TransformedBitmap(strip, new ScaleTransform(stripScale, stripScale));
+            }
+            strip.Freeze();
+
             return new SnapshotResult(
                 reservedOutputPath,
                 currentPosition,
                 processedBitmap.PixelWidth,
                 processedBitmap.PixelHeight,
                 fi.Length,
-                thumb
+                thumb,
+                strip,
+                videoFilePath
             );
             }
             catch

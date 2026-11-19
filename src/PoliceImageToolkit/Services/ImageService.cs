@@ -40,12 +40,12 @@ public class ImageService : IImageService
                 ct.ThrowIfCancellationRequested();
                 item.Progress = 30;
 
-                // 讀取影像至記憶體（OnLoad 確保檔案解碼完成，不保留串流鎖定）
+                // 先讀取標頭及尺寸，再進行像素解碼；串流保持開啟至編碼結束。
                 using var fs = new FileStream(item.FilePath, FileMode.Open, FileAccess.Read, FileShare.Read);
                 var decoder = BitmapDecoder.Create(
                     fs,
                     BitmapCreateOptions.PreservePixelFormat | BitmapCreateOptions.IgnoreColorProfile,
-                    BitmapCacheOption.OnLoad
+                    BitmapCacheOption.OnDemand
                 );
 
                 if (decoder.Frames.Count == 0)
@@ -60,9 +60,9 @@ public class ImageService : IImageService
                     throw new InvalidDataException($"影像解析度 {frame.PixelWidth} × {frame.PixelHeight} 超過安全處理上限。");
                 }
 
-                if (Path.GetExtension(item.FilePath).Equals(".gif", StringComparison.OrdinalIgnoreCase) && decoder.Frames.Count > 1)
+                if (decoder.Frames.Count > 1)
                 {
-                    throw new NotSupportedException("目前不支援動畫 GIF；為避免遺失後續影格，請先轉成單張圖片或逐格匯出。");
+                    throw new NotSupportedException("不支援動畫 GIF 或多頁影像；為避免遺失內容，請先逐頁匯出再轉檔。");
                 }
 
                 BitmapSource processedBitmap = frame;
@@ -192,12 +192,16 @@ public class ImageService : IImageService
 
     private static int GetExifOrientation(BitmapMetadata metadata)
     {
-        const string query = "/app1/ifd/{ushort=274}";
-        if (metadata.ContainsQuery(query))
+        foreach (string query in new[] { "/app1/ifd/{ushort=274}", "/ifd/{ushort=274}" })
         {
-            object val = metadata.GetQuery(query);
-            if (val is ushort u) return u;
-            if (val is int i) return i;
+            try
+            {
+                if (!metadata.ContainsQuery(query)) continue;
+                object val = metadata.GetQuery(query);
+                if (val is ushort u) return u;
+                if (val is int i) return i;
+            }
+            catch (NotSupportedException) { /* 此格式不提供該 metadata 查詢。 */ }
         }
         return 1;
     }

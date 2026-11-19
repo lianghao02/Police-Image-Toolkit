@@ -22,6 +22,7 @@ public class ImageConverterViewModel : ViewModelBase
     private readonly IOutputIndexService _outputIndexService;
     private readonly Action? _onPreferencesChanged;
     private CancellationTokenSource? _cts;
+    private readonly Dictionary<string, List<OutputIndexEntry>> _pendingIndexEntries = new(StringComparer.OrdinalIgnoreCase);
 
     private string _targetFormat = "JPG";
     private int _jpgQuality = 90;
@@ -31,7 +32,8 @@ public class ImageConverterViewModel : ViewModelBase
     private bool _useCustomOutputDirectory = false;
     private bool _isProcessing = false;
     private double _overallProgress = 0;
-    private string _summaryText = "請拖曳圖片或資料夾，或點擊「新增檔案」開始";
+    private string _indexMessage = string.Empty;
+    private string _summaryText = "請拖曳圖片或資料夾，或點擊「加入圖片」開始";
 
     public ImageConverterViewModel(
         IImageService imageService,
@@ -61,12 +63,26 @@ public class ImageConverterViewModel : ViewModelBase
         RemoveSelectedCommand = new RelayCommand(ExecuteRemoveSelected, _ => !IsProcessing);
         ClearAllCommand = new RelayCommand(_ => ExecuteClearAll(), _ => !IsProcessing && Tasks.Count > 0);
         ResetStatusCommand = new RelayCommand(_ => ResetTasksForReconvert(), _ => !IsProcessing && Tasks.Any(t => t.Status != TaskStatus.Pending));
-        StartConvertCommand = new RelayCommand(async _ => await StartConvertAsync(), _ => !IsProcessing && Tasks.Count > 0);
+        StartConvertCommand = new RelayCommand(async _ => await StartConvertAsync(), _ => !IsProcessing && Tasks.Any(t => t.Status != TaskStatus.Success));
         CancelConvertCommand = new RelayCommand(_ => ExecuteCancelConvert(), _ => IsProcessing);
-        BrowseOutputDirectoryCommand = new RelayCommand(_ => ExecuteBrowseOutputDirectory());
+        ReconvertCommand = new RelayCommand(async _ =>
+        {
+            var result = System.Windows.MessageBox.Show("依目前設定重新轉換清單中的全部圖片？\n\n先前輸出與原始檔案都會保留，另存為新檔。", "重新轉檔", System.Windows.MessageBoxButton.YesNo);
+            if (result != System.Windows.MessageBoxResult.Yes) return;
+            ResetTasksForReconvert();
+            await StartConvertAsync();
+        }, _ => !IsProcessing && Tasks.Any(t => t.Status == TaskStatus.Success));
+        RetryIndexCommand = new RelayCommand(async _ =>
+        {
+            if (IsProcessing) return;
+            IsProcessing = true;
+            try { IndexMessage = await UpdateOutputIndexesAsync(Tasks); }
+            finally { IsProcessing = false; }
+        }, _ => !IsProcessing && (Tasks.Any(t => t.Status == TaskStatus.Success) || _pendingIndexEntries.Count > 0));
+        BrowseOutputDirectoryCommand = new RelayCommand(_ => ExecuteBrowseOutputDirectory(), _ => !IsProcessing);
         OpenOutputDirectoryCommand = new RelayCommand(
             _ => ExecuteOpenOutputDirectory(),
-            _ => Tasks.Any(t => !string.IsNullOrEmpty(t.OutputPath)));
+            _ => Tasks.Count > 0 || (UseCustomOutputDirectory && !string.IsNullOrWhiteSpace(OutputDirectory)));
     }
 
     public ObservableCollection<ImageTaskItem> Tasks { get; }
@@ -159,6 +175,7 @@ public class ImageConverterViewModel : ViewModelBase
         {
             if (SetProperty(ref _isProcessing, value))
             {
+                OnPropertyChanged(nameof(CanEditSettings));
                 CommandManager.InvalidateRequerySuggested();
             }
         }
@@ -176,6 +193,10 @@ public class ImageConverterViewModel : ViewModelBase
         set => SetProperty(ref _summaryText, value);
     }
 
+    public string IndexMessage { get => _indexMessage; private set => SetProperty(ref _indexMessage, value); }
+    public bool CanEditSettings => !IsProcessing;
+    public ICommand ReconvertCommand { get; }
+    public ICommand RetryIndexCommand { get; }
     public ICommand AddFilesCommand { get; }
     public ICommand RemoveSelectedCommand { get; }
     public ICommand ClearAllCommand { get; }
@@ -187,6 +208,7 @@ public class ImageConverterViewModel : ViewModelBase
 
     public int AddFiles(IEnumerable<string> inputPaths)
     {
+        if (IsProcessing) return 0;
         var existingPaths = Tasks.Select(t => t.FilePath).ToHashSet(StringComparer.OrdinalIgnoreCase);
         int added = 0;
 
@@ -241,6 +263,8 @@ public class ImageConverterViewModel : ViewModelBase
 
                 foreach (string file in files)
                 {
+                    if (file.Split(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar)
+                        .Any(segment => segment.Equals(".pit-recovery", StringComparison.OrdinalIgnoreCase))) continue;
                     yield return file;
                 }
             }
@@ -253,7 +277,7 @@ public class ImageConverterViewModel : ViewModelBase
         {
             Multiselect = true,
             Filter = "支援影像格式 (*.jpg;*.jpeg;*.png;*.heic;*.heif;*.webp;*.bmp;*.tif;*.tiff;*.gif)|*.jpg;*.jpeg;*.png;*.heic;*.heif;*.webp;*.bmp;*.tif;*.tiff;*.gif|所有檔案 (*.*)|*.*",
-            Title = "選擇要轉檔的手機圖片"
+            Title = "選擇要轉檔的圖片"
         };
 
         if (dialog.ShowDialog() == true)
@@ -307,7 +331,7 @@ public class ImageConverterViewModel : ViewModelBase
         var pendingTasks = Tasks.Where(t => t.Status != TaskStatus.Success).ToList();
         if (pendingTasks.Count == 0)
         {
-            SummaryText = "清單中的圖片皆已轉檔完成；若要以新設定重轉，請按「🔄 重設狀態」。";
+            SummaryText = "清單中的圖片皆已轉檔完成；若要以新設定重轉，請按「依設定重新轉檔」。";
             return;
         }
 
@@ -322,6 +346,13 @@ public class ImageConverterViewModel : ViewModelBase
         _cts = new CancellationTokenSource();
         var ct = _cts.Token;
 
+        // 整批固定設定；UI 修改或背景工作不得改變已開始的批次。
+        string batchFormat = TargetFormat;
+        int batchQuality = JpgQuality;
+        bool batchOrient = AutoOrient;
+        int batchDimension = MaxDimension;
+        string? batchDirectory = UseCustomOutputDirectory && !string.IsNullOrWhiteSpace(OutputDirectory) ? OutputDirectory : null;
+        IndexMessage = string.Empty;
         int total = pendingTasks.Count;
         int completed = 0;
         OverallProgress = 0;
@@ -333,22 +364,20 @@ public class ImageConverterViewModel : ViewModelBase
         {
             var parallelOptions = new ParallelOptions
             {
-                MaxDegreeOfParallelism = Math.Max(1, Environment.ProcessorCount - 1),
+                MaxDegreeOfParallelism = (int)Math.Clamp(GC.GetGCMemoryInfo().TotalAvailableMemoryBytes / (512L * 1024 * 1024), 1, Math.Min(2, Environment.ProcessorCount)),
                 CancellationToken = ct
             };
 
             await Parallel.ForEachAsync(pendingTasks, parallelOptions, async (task, token) =>
             {
-                string targetDir = UseCustomOutputDirectory && !string.IsNullOrWhiteSpace(OutputDirectory)
-                    ? OutputDirectory
-                    : Path.Combine(Path.GetDirectoryName(task.FilePath) ?? Environment.GetFolderPath(Environment.SpecialFolder.Desktop), "Converted");
+                string targetDir = batchDirectory ?? Path.Combine(Path.GetDirectoryName(task.FilePath) ?? Environment.GetFolderPath(Environment.SpecialFolder.Desktop), "Converted");
 
                 var options = new ImageConvertOptions(
-                    TargetFormat,
-                    JpgQuality,
+                    batchFormat,
+                    batchQuality,
                     targetDir,
-                    AutoOrient,
-                    MaxDimension
+                    batchOrient,
+                    batchDimension
                 );
 
                 await _imageService.ConvertAsync(task, options, token);
@@ -365,12 +394,11 @@ public class ImageConverterViewModel : ViewModelBase
 
             sw.Stop();
             int successCount = pendingTasks.Count(t => t.Status == TaskStatus.Success);
-            string indexStatus = await UpdateOutputIndexesAsync(pendingTasks);
-            SummaryText = $"轉檔完成！成功: {successCount} 筆，失敗: {total - successCount} 筆 (總耗時: {sw.Elapsed.TotalSeconds:0.##} 秒){indexStatus}";
+            SummaryText = $"轉檔完成！成功: {successCount} 筆，失敗: {total - successCount} 筆 (總耗時: {sw.Elapsed.TotalSeconds:0.##} 秒)";
         }
         catch (OperationCanceledException)
         {
-            SummaryText = "已取消轉檔作業。";
+            SummaryText = "已停止轉檔；完成的圖片已保留，其餘項目可再按「開始轉檔」繼續。";
         }
         catch (Exception ex)
         {
@@ -378,6 +406,8 @@ public class ImageConverterViewModel : ViewModelBase
         }
         finally
         {
+            // 包含取消及失敗前已成功寫出的檔案；重試時也補齊先前漏寫的索引。
+            IndexMessage = await UpdateOutputIndexesAsync(Tasks);
             IsProcessing = false;
             _cts?.Dispose();
             _cts = null;
@@ -392,37 +422,32 @@ public class ImageConverterViewModel : ViewModelBase
 
     private async Task<string> UpdateOutputIndexesAsync(IEnumerable<ImageTaskItem> processedTasks)
     {
-        var groups = processedTasks
-            .Where(task => task.Status == TaskStatus.Success && !string.IsNullOrWhiteSpace(task.OutputPath))
-            .GroupBy(task => Path.GetDirectoryName(task.OutputPath)!)
-            .ToList();
-        if (groups.Count == 0) return string.Empty;
-
-        int updated = 0;
-        int failed = 0;
-        foreach (var group in groups)
+        foreach (var group in processedTasks.Where(t => t.Status == TaskStatus.Success && !string.IsNullOrWhiteSpace(t.OutputPath))
+            .GroupBy(t => Path.GetDirectoryName(t.OutputPath)!))
+        {
+            if (!_pendingIndexEntries.TryGetValue(group.Key, out var entries))
+                _pendingIndexEntries[group.Key] = entries = [];
+            foreach (var task in group)
+            {
+                string outputName = Path.GetFileName(task.OutputPath);
+                entries.RemoveAll(x => string.Equals(x.OutputFile, outputName, StringComparison.OrdinalIgnoreCase));
+                entries.Add(new OutputIndexEntry(outputName, task.FileName, "image_conversion", null, task.OutputWidth, task.OutputHeight));
+            }
+        }
+        if (_pendingIndexEntries.Count == 0) return string.Empty;
+        int updated = 0, failed = 0;
+        foreach (var group in _pendingIndexEntries.ToArray())
         {
             try
             {
-                var entries = group.Select(task => new OutputIndexEntry(
-                    Path.GetFileName(task.OutputPath),
-                    task.FileName,
-                    "image_conversion",
-                    null,
-                    task.OutputWidth,
-                    task.OutputHeight));
-                await _outputIndexService.AppendEntriesAsync(group.Key, entries);
+                await _outputIndexService.AppendEntriesAsync(group.Key, group.Value);
+                _pendingIndexEntries.Remove(group.Key);
                 updated++;
             }
-            catch
-            {
-                failed++;
-            }
+            catch { failed++; }
         }
-
-        return failed == 0
-            ? $"；已更新 {updated} 個輸出索引"
-            : $"；{failed} 個輸出索引未更新（影像已保留）";
+        return failed == 0 ? $"來源紀錄已更新（{updated} 個資料夾）"
+            : $"{failed} 個資料夾的來源紀錄更新失敗；圖片已保留，請按「重試來源紀錄」。";
     }
 
     private void ExecuteBrowseOutputDirectory()
@@ -444,23 +469,25 @@ public class ImageConverterViewModel : ViewModelBase
         string dir = UseCustomOutputDirectory && !string.IsNullOrWhiteSpace(OutputDirectory)
             ? OutputDirectory
             : (Tasks.FirstOrDefault(t => !string.IsNullOrEmpty(t.OutputPath))?.OutputPath is { } p ? Path.GetDirectoryName(p) : null)
-              ?? Environment.GetFolderPath(Environment.SpecialFolder.Desktop);
+              ?? (Tasks.FirstOrDefault() is { } first ? Path.Combine(Path.GetDirectoryName(first.FilePath)!, "Converted") : Environment.GetFolderPath(Environment.SpecialFolder.Desktop));
 
-        if (Directory.Exists(dir))
+        try
         {
+            Directory.CreateDirectory(dir);
             Process.Start(new ProcessStartInfo
             {
                 FileName = dir,
                 UseShellExecute = true
             });
         }
+        catch (Exception ex) { SummaryText = $"無法開啟輸出資料夾：{ex.Message}"; }
     }
 
     private void UpdateSummary()
     {
         if (Tasks.Count == 0)
         {
-            SummaryText = "請拖曳圖片或資料夾，或點擊「新增檔案」開始";
+            SummaryText = "請拖曳圖片或資料夾，或點擊「加入圖片」開始";
         }
         else
         {

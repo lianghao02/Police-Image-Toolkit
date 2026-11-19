@@ -9,6 +9,7 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <Compile Include="../../src/PoliceImageToolkit/Services/SnapshotOutputDirectory.cs" Link="Services/SnapshotOutputDirectory.cs"/>
     <Compile Include="..\..\src\PoliceImageToolkit\Models\ByteSizeFormatter.cs" Link="Models\ByteSizeFormatter.cs" />
     <Compile Include="..\..\src\PoliceImageToolkit\Models\ImageTaskItem.cs" Link="Models\ImageTaskItem.cs" />
     <Compile Include="..\..\src\PoliceImageToolkit\Models\OutputIndexEntry.cs" Link="Models\OutputIndexEntry.cs" />

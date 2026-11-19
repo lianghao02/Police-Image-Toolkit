@@ -7,7 +7,7 @@ namespace PoliceImageToolkit.Services;
 
 public class UpdateService : IUpdateService
 {
-    public const string FallbackVersion = "v11.5.0";
+    public const string FallbackVersion = "v11.5.2";
 
     private static readonly HttpClient _httpClient = new()
     {
