@@ -3,13 +3,13 @@
 ## 核心元資料
 - **Repository**：lianghao02/Police-Image-Toolkit
 - **Branch**：main
-- **Commit SHA**：8d0870e02742aa8df274d5473c07ba899ce75b12（含工作目錄尚未提交之 v11.6.0 修訂）
+- **Commit SHA**：`4481151`（承接 `v11.6.0` 發布提交並包含 `2026-11-22` 介面視覺調校與 `RUN-DEV.bat`）
 - **Skill Version**：v1.0.0
 - **Task Type**：IMPROVE / RELEASE（本機建置與驗證）
 - **Local Path Hint**：03_Police-Image-Toolkit
 
 ## 目前狀態
-2026-11-19：已完成 v11.6.0 全方位 UI／UX 重構、鑑識流水號／還原順序修正、記憶體最佳化、檔案鎖／日誌路徑清理與文件同步；已完成本機單檔建置、QA 測試與啟動檢查，尚未執行 Git Commit／Push 或建立遠端 Release。
+2026-11-22：v11.6.0 與 `2026-11-22` 介面調校（`11f3d51` 深警務藍標題列與降眩光冷灰藍分層色調、`4481151` 2D 日系動漫天青硬邊風格與 `RUN-DEV.bat`）皆已提交至 `main`；本機單檔 v11.6.0 建置與自動化測試（`25/25` 核心、`5/5` 整合）記錄如下。Windows 實片長期播放、多 DPI（125%/150%）視覺 QA 與是否重新封裝發版仍待實機確認。
 
 ## 已完成與驗證
 - 使用 .NET SDK 8.0.406 執行 `scripts/qa.ps1`：Release 建置 **0 警告、0 錯誤**；核心測試 **`25/25`** 通過、來源紀錄整合測試 **`5/5`** 通過；`git diff --check` 與敏感值掃描通過。
