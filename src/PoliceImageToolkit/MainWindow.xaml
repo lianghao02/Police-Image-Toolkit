@@ -3,9 +3,9 @@
     <Style x:Key="NavRadioButtonStyle" TargetType="RadioButton">
       <Setter Property="FontSize" Value="14.5"/>
       <Setter Property="FontWeight" Value="SemiBold"/>
-      <Setter Property="Padding" Value="16,10"/>
+      <Setter Property="Padding" Value="16,11"/>
       <Setter Property="Cursor" Value="Hand"/>
-      <Setter Property="Foreground" Value="{StaticResource TextSecondary}"/>
+      <Setter Property="Foreground" Value="#CBD5E1"/>
       <Setter Property="Template">
         <Setter.Value>
           <ControlTemplate TargetType="RadioButton">
@@ -13,16 +13,18 @@
               <ContentPresenter VerticalAlignment="Center"/>
             </Border>
             <ControlTemplate.Triggers>
-              <Trigger Property="IsChecked" Value="True">
-                <Setter Property="Foreground" Value="{StaticResource AccentPrimary}"/>
-                <Setter Property="FontWeight" Value="Bold"/>
-                <Setter TargetName="tab" Property="BorderBrush" Value="{StaticResource AccentPrimary}"/>
-              </Trigger>
               <Trigger Property="IsMouseOver" Value="True">
-                <Setter TargetName="tab" Property="Background" Value="{StaticResource BgInset}"/>
+                <Setter TargetName="tab" Property="Background" Value="#21427A"/>
+                <Setter Property="Foreground" Value="White"/>
+              </Trigger>
+              <Trigger Property="IsChecked" Value="True">
+                <Setter Property="Foreground" Value="White"/>
+                <Setter Property="FontWeight" Value="Bold"/>
+                <Setter TargetName="tab" Property="Background" Value="#203F75"/>
+                <Setter TargetName="tab" Property="BorderBrush" Value="#60A5FA"/>
               </Trigger>
               <Trigger Property="IsKeyboardFocused" Value="True">
-                <Setter TargetName="tab" Property="Background" Value="{StaticResource RowSelected}"/>
+                <Setter TargetName="tab" Property="Background" Value="#2B5294"/>
               </Trigger>
             </ControlTemplate.Triggers>
           </ControlTemplate>
@@ -40,17 +42,17 @@
       <RowDefinition Height="Auto"/>
     </Grid.RowDefinitions>
 
-    <Border Grid.Row="0" Background="White" BorderBrush="{StaticResource BorderColorLight}" BorderThickness="0,0,0,1" Padding="18,0">
+    <Border Grid.Row="0" Background="{StaticResource HeaderBrush}" BorderBrush="#0F2347" BorderThickness="0,0,0,2" Padding="18,0">
       <DockPanel>
         <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Center" Margin="12,0,0,0">
-          <TextBlock Text="{Binding CurrentVersionDisplay}" Style="{StaticResource HelperTextStyle}" VerticalAlignment="Center" Margin="0,0,10,0"/>
-          <Button Content="檢查更新" Command="{Binding CheckUpdateCommand}" Style="{StaticResource CompactButtonStyle}"/>
+          <TextBlock Text="{Binding CurrentVersionDisplay}" FontSize="12.5" Foreground="#CBD5E1" VerticalAlignment="Center" Margin="0,0,10,0"/>
+          <Button Content="檢查更新" Command="{Binding CheckUpdateCommand}" Style="{StaticResource HeaderButtonStyle}"/>
         </StackPanel>
         <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
           <StackPanel VerticalAlignment="Center" Margin="0,8,18,8">
-            <TextBlock Text="Police Image Toolkit" Style="{StaticResource Heading1TextStyle}" FontSize="17"/>
+            <TextBlock Text="Police Image Toolkit" Style="{StaticResource Heading1TextStyle}" FontSize="17" Foreground="White"/>
           </StackPanel>
-          <Border Width="1" Height="22" Background="{StaticResource BorderColorLight}" VerticalAlignment="Center" Margin="0,0,10,0"/>
+          <Border Width="1" Height="22" Background="#466497" VerticalAlignment="Center" Margin="0,0,10,0"/>
           <RadioButton x:Name="TabImage" Content="圖片轉檔" IsChecked="True" GroupName="NavTabs" Checked="TabImage_Checked" Style="{StaticResource NavRadioButtonStyle}"/>
           <RadioButton x:Name="TabVideo" Content="手機錄影截圖" GroupName="NavTabs" Checked="TabVideo_Checked" Style="{StaticResource NavRadioButtonStyle}"/>
         </StackPanel>
@@ -62,7 +64,7 @@
       <views:VideoSnapshotView x:Name="ViewVideoSnapshot" DataContext="{Binding VideoSnapshot}" Visibility="Collapsed" Focusable="True"/>
     </Grid>
 
-    <Border Grid.Row="2" Background="White" BorderBrush="{StaticResource BorderColorLight}" BorderThickness="0,1,0,0" Padding="18,6">
+    <Border Grid.Row="2" Background="{StaticResource FooterBg}" BorderBrush="{StaticResource BorderColorLight}" BorderThickness="0,1,0,0" Padding="18,6">
       <TextBlock Text="所有處理皆於本機執行 · 衍生圖片不覆寫原始檔案 · 僅手動檢查更新時連線" Style="{StaticResource HelperTextStyle}" TextWrapping="Wrap"/>
     </Border>
   </Grid>

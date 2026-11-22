@@ -11,14 +11,15 @@
 
     <Color x:Key="InkColor">#1E293B</Color>
     <SolidColorBrush x:Key="Ink" Color="{StaticResource InkColor}"/>
-    <SolidColorBrush x:Key="BgPrimary" Color="#F3F6FA"/>
-    <SolidColorBrush x:Key="BgSecondary" Color="#EFF3F8"/>
-    <SolidColorBrush x:Key="BgCard" Color="#FFFFFF"/>
+    <SolidColorBrush x:Key="BgPrimary" Color="#DCE4EE"/>
+    <SolidColorBrush x:Key="BgSecondary" Color="#D3DDE9"/>
+    <SolidColorBrush x:Key="BgCard" Color="#FAFBFD"/>
     <SolidColorBrush x:Key="BgInput" Color="#FFFFFF"/>
-    <SolidColorBrush x:Key="BgInset" Color="#F1F5F9"/>
+    <SolidColorBrush x:Key="BgInset" Color="#E7EEF6"/>
+    <SolidColorBrush x:Key="FooterBg" Color="#E6EDF6"/>
     <SolidColorBrush x:Key="BorderColor" Color="{StaticResource InkColor}"/>
-    <SolidColorBrush x:Key="BorderColorLight" Color="#D7DEE8"/>
-    <SolidColorBrush x:Key="BorderColorInput" Color="#94A3B8"/>
+    <SolidColorBrush x:Key="BorderColorLight" Color="#C3CFDF"/>
+    <SolidColorBrush x:Key="BorderColorInput" Color="#8899AE"/>
     <SolidColorBrush x:Key="BorderColorFocus" Color="#245BBC"/>
     <SolidColorBrush x:Key="TextPrimary" Color="{StaticResource InkColor}"/>
     <SolidColorBrush x:Key="TextSecondary" Color="#475569"/>
@@ -37,28 +38,29 @@
     <SolidColorBrush x:Key="SuccessChin" Color="#146B3C"/>
     <SolidColorBrush x:Key="DangerFace" Color="#D13A4B"/>
     <SolidColorBrush x:Key="DangerChin" Color="#9E2232"/>
-    <SolidColorBrush x:Key="SecondaryFace" Color="#FFFFFF"/>
-    <SolidColorBrush x:Key="SecondaryChin" Color="#CBD5E1"/>
-    <SolidColorBrush x:Key="GoldFace" Color="#E8EFFA"/>
-    <SolidColorBrush x:Key="GoldChin" Color="#CBD5E1"/>
-    <SolidColorBrush x:Key="DisabledBg" Color="#E2E8F0"/>
-    <SolidColorBrush x:Key="DisabledBorder" Color="#CBD5E1"/>
+    <SolidColorBrush x:Key="SecondaryFace" Color="#F4F7FB"/>
+    <SolidColorBrush x:Key="SecondaryChin" Color="#B4C2D4"/>
+    <SolidColorBrush x:Key="GoldFace" Color="#DCE8FC"/>
+    <SolidColorBrush x:Key="GoldChin" Color="#93B2E3"/>
+    <SolidColorBrush x:Key="DisabledBg" Color="#DCE3EC"/>
+    <SolidColorBrush x:Key="DisabledBorder" Color="#C3CFDF"/>
     <SolidColorBrush x:Key="DisabledFg" Color="#64748B"/>
     <SolidColorBrush x:Key="RowBackground" Color="#FFFFFF"/>
-    <SolidColorBrush x:Key="RowZebra" Color="#F8FAFC"/>
-    <SolidColorBrush x:Key="RowSelected" Color="#DCE8FF"/>
-    <SolidColorBrush x:Key="TrackBackground" Color="#E2E8F0"/>
-    <SolidColorBrush x:Key="PillBlue" Color="#DCE8FF"/>
-    <SolidColorBrush x:Key="PillMint" Color="#EAF5EF"/>
-    <SolidColorBrush x:Key="PillLilac" Color="#EFF2F8"/>
-    <SolidColorBrush x:Key="PillGold" Color="#F5F8FC"/>
-    <SolidColorBrush x:Key="ScrollThumb" Color="#CBD5E1"/>
-    <SolidColorBrush x:Key="ScrollThumbHover" Color="#94A3B8"/>
+    <SolidColorBrush x:Key="RowZebra" Color="#EFF4FA"/>
+    <SolidColorBrush x:Key="RowSelected" Color="#D3E2FC"/>
+    <SolidColorBrush x:Key="TrackBackground" Color="#D5DFEC"/>
+    <SolidColorBrush x:Key="PillBlue" Color="#D6E6FF"/>
+    <SolidColorBrush x:Key="PillMint" Color="#DCF2E5"/>
+    <SolidColorBrush x:Key="PillLilac" Color="#E4E9F5"/>
+    <SolidColorBrush x:Key="PillGold" Color="#E8EFF9"/>
+    <SolidColorBrush x:Key="ScrollThumb" Color="#B6C4D6"/>
+    <SolidColorBrush x:Key="ScrollThumbHover" Color="#8E9FB5"/>
     <SolidColorBrush x:Key="ScrollThumbDrag" Color="#64748B"/>
     <SolidColorBrush x:Key="PhoneFrameColor" Color="#1E293B"/>
     <SolidColorBrush x:Key="PhoneScreenColor" Color="#0F172A"/>
-    <SolidColorBrush x:Key="WindowPatternBrush" Color="#F3F6FA"/>
-    <SolidColorBrush x:Key="HeaderBrush" Color="#173E82"/>
+    <SolidColorBrush x:Key="CompareFrameColor" Color="#3B4D66"/>
+    <SolidColorBrush x:Key="WindowPatternBrush" Color="#DCE4EE"/>
+    <SolidColorBrush x:Key="HeaderBrush" Color="#173262"/>
 
     <FontFamily x:Key="AppFont">Microsoft JhengHei UI, Microsoft JhengHei, Segoe UI, sans-serif</FontFamily>
     <FontFamily x:Key="NumberFont">Consolas, Microsoft JhengHei UI, Segoe UI</FontFamily>
@@ -526,6 +528,8 @@
       <Setter Property="BorderBrush" Value="{StaticResource SecondaryChin}"/>
     </Style>
     <Style x:Key="GoldButtonStyle" TargetType="Button" BasedOn="{StaticResource SecondaryButtonStyle}">
+      <Setter Property="Foreground" Value="#153E8C"/>
+      <Setter Property="FontWeight" Value="Bold"/>
       <Setter Property="Background" Value="{StaticResource GoldFace}"/>
       <Setter Property="BorderBrush" Value="{StaticResource GoldChin}"/>
     </Style>
@@ -533,6 +537,11 @@
       <Setter Property="FontSize" Value="12.5"/>
       <Setter Property="Height" Value="28"/>
       <Setter Property="Padding" Value="10,0"/>
+    </Style>
+    <Style x:Key="HeaderButtonStyle" TargetType="Button" BasedOn="{StaticResource CompactButtonStyle}">
+      <Setter Property="Foreground" Value="#F8FAFC"/>
+      <Setter Property="Background" Value="#244782"/>
+      <Setter Property="BorderBrush" Value="#5075B3"/>
     </Style>
     <Style x:Key="CompactDangerButtonStyle" TargetType="Button" BasedOn="{StaticResource CompactButtonStyle}">
       <Setter Property="Foreground" Value="{StaticResource AccentDangerHover}"/>
@@ -555,11 +564,11 @@
             </Border>
             <ControlTemplate.Triggers>
               <Trigger Property="IsMouseOver" Value="True">
-                <Setter TargetName="pill" Property="Background" Value="{StaticResource BgInset}"/>
+                <Setter TargetName="pill" Property="Background" Value="#D6E1F0"/>
               </Trigger>
               <Trigger Property="IsChecked" Value="True">
-                <Setter TargetName="pill" Property="Background" Value="White"/>
-                <Setter Property="Foreground" Value="{StaticResource AccentPrimary}"/>
+                <Setter TargetName="pill" Property="Background" Value="{StaticResource PrimaryFace}"/>
+                <Setter Property="Foreground" Value="White"/>
                 <Setter Property="FontWeight" Value="Bold"/>
               </Trigger>
             </ControlTemplate.Triggers>
