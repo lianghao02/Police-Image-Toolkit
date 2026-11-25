@@ -1,11 +1,15 @@
 # 變更紀錄 (CHANGELOG)
 
-## 🧪 未發布：2026-11-22 介面視覺風格與開發啟動器調整
+## v11.7.0（2026-11-25）
 
-本節為原始碼修訂，尚未另行發布對應的正式 Windows 執行檔。
-
-- **介面視覺調校**：加入深警務藍標題列與降眩光冷灰藍分層色調，並於 `App.xaml`／`MainWindow.xaml` 套用 2D 日系動漫天青硬邊風格。
-- **開發啟動入口**：新增 `RUN-DEV.bat`（轉呼 `RUN.bat -Dev`），便於本機原始碼開發啟動驗證。
+- **介面視覺調校與開發啟動入口**：
+  - 加入深警務藍標題列與降眩光冷灰藍分層色調，並於 `App.xaml`／`MainWindow.xaml` 套用 2D 日系動漫天青硬邊風格。
+  - 新增 `RUN-DEV.bat`（轉呼 `RUN.bat -Dev`），便於本機原始碼開發啟動驗證。
+- **轉檔色彩保真與品質修訂**：
+  - `ImageService`：JPG／PNG／TIFF 轉檔優先保留 ICC 色彩描述檔（異常時安全退回），JPG／TIFF 輸出保留關鍵 EXIF 拍攝時間與機型並於自動旋轉後將 `Orientation` 歸正為 `1`；原圖預覽統一共用 `LoadOrientedBitmap` 自動轉正並對齊 2D 天青主題。
+  - `ImageConverterViewModel` / `ImageConverterView`：背景縮圖載入補齊 `CancellationTokenSource` 取消與 `FileShare.ReadWrite | FileShare.Delete`，避免清空清單或測試清理時鎖檔。
+  - `MainWindow`：移除 `Loaded` 時寫死的 `MaxWidth`／`MaxHeight` 限制，支援拖移至外接大螢幕自由放大。
+  - 核心測試擴充至 `27/27`、整合測試 `5/5`。
 
 ## v11.6.0（2026-11-19）
 

@@ -3,9 +3,9 @@
 ## 核心元資料
 - **Repository**：lianghao02/Police-Image-Toolkit
 - **Branch**：main
-- **Commit SHA**：`2275964` 之後之本輪修訂提交（詳見 `git log -1`；承接 `v11.6.0` 與 `2026-11-22` 2D 動漫風格及 `2026-11-25` 品質修訂）
+- **Commit SHA**：`fcc8335` 之後之 `v11.7.0` 發布提交（詳見 `git log -1`；整合 `2026-11-22` 2D 動漫風格與 `2026-11-25` 品質修訂）
 - **Skill Version**：v1.0.0
-- **Task Type**：FIX / RELEASE（品質修訂、單檔重新封裝與驗證）
+- **Task Type**：RELEASE（v11.7.0 版本升版、QA 與發布）
 - **Local Path Hint**：03_Police-Image-Toolkit
 
 ## 目前狀態
@@ -31,4 +31,4 @@
 
 ## 限制與下一步
 - 本機自動化測試不涵蓋完整實片（HEVC/MP4/MOV）長期播放操作與多 DPI（125%/150%）人工視覺驗收；WPF `MediaPlayer` 仍依賴系統可用視訊解碼器。
-- 若確認 `RUN.bat` 實測無誤，請再決定是否執行 Git Commit、Push 與推動 `release/v11.6.0` 分支發布。
+- 已完成 `v11.7.0` 升版、QA 與發布流程；後續僅於實際 Bug 或實機需求時重開維護。
