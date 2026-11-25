@@ -23,6 +23,7 @@ public class ImageConverterViewModel : ViewModelBase
     private readonly IOutputIndexService _outputIndexService;
     private readonly Action? _onPreferencesChanged;
     private CancellationTokenSource? _cts;
+    private CancellationTokenSource? _thumbnailCts;
     private readonly Dictionary<string, List<OutputIndexEntry>> _pendingIndexEntries = new(StringComparer.OrdinalIgnoreCase);
 
     private string _targetFormat = "JPG";
@@ -249,23 +250,43 @@ public class ImageConverterViewModel : ViewModelBase
 
         if (addedItems.Count > 0)
         {
-            _ = LoadThumbnailsAsync(addedItems);
+            var token = EnsureThumbnailToken();
+            _ = LoadThumbnailsAsync(addedItems, token);
         }
 
         UpdateSummary();
         return addedItems.Count;
     }
 
-    private async Task LoadThumbnailsAsync(IReadOnlyList<ImageTaskItem> items)
+    public void CancelThumbnailLoading()
+    {
+        var oldCts = Interlocked.Exchange(ref _thumbnailCts, null);
+        if (oldCts != null)
+        {
+            try { oldCts.Cancel(); } catch { }
+            oldCts.Dispose();
+        }
+    }
+
+    private CancellationToken EnsureThumbnailToken()
+    {
+        _thumbnailCts ??= new CancellationTokenSource();
+        return _thumbnailCts.Token;
+    }
+
+    private async Task LoadThumbnailsAsync(IReadOnlyList<ImageTaskItem> items, CancellationToken ct)
     {
         await Task.Run(() =>
         {
             foreach (var item in items)
             {
+                if (ct.IsCancellationRequested) break;
                 try
                 {
                     if (!File.Exists(item.FilePath)) continue;
-                    using var fs = new FileStream(item.FilePath, FileMode.Open, FileAccess.Read, FileShare.Read);
+                    // 僅供列表縮圖預覽：允許其他操作共用讀寫／刪除，避免清空清單或外部移動檔案時發生鎖檔。
+                    using var fs = new FileStream(item.FilePath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
+                    if (ct.IsCancellationRequested) break;
                     var bitmap = new BitmapImage();
                     bitmap.BeginInit();
                     bitmap.CacheOption = BitmapCacheOption.OnLoad;
@@ -273,7 +294,14 @@ public class ImageConverterViewModel : ViewModelBase
                     bitmap.StreamSource = fs;
                     bitmap.EndInit();
                     bitmap.Freeze();
-                    RunOnUIThread(() => item.Thumbnail = bitmap);
+                    if (ct.IsCancellationRequested) break;
+                    RunOnUIThread(() =>
+                    {
+                        if (!ct.IsCancellationRequested && Tasks.Contains(item))
+                        {
+                            item.Thumbnail = bitmap;
+                        }
+                    });
                 }
                 catch
                 {
@@ -362,6 +390,7 @@ public class ImageConverterViewModel : ViewModelBase
 
     private void ExecuteClearAll()
     {
+        CancelThumbnailLoading();
         Tasks.Clear();
         OverallProgress = 0;
         UpdateSummary();

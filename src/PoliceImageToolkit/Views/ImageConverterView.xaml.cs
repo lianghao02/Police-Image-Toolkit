@@ -16,6 +16,10 @@ public partial class ImageConverterView : UserControl
         InitializeComponent();
         Unloaded += (_, _) =>
         {
+            if (DataContext is ImageConverterViewModel vm)
+            {
+                vm.CancelThumbnailLoading();
+            }
             _previewWindow?.Close();
             _previewWindow = null;
         };

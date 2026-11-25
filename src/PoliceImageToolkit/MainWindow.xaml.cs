@@ -18,7 +18,6 @@ public partial class MainWindow : Window
             var area = SystemParameters.WorkArea;
             MinWidth = Math.Min(MinWidth, area.Width);
             MinHeight = Math.Min(MinHeight, area.Height);
-            MaxWidth = area.Width; MaxHeight = area.Height;
             Width = Math.Min(Width, area.Width); Height = Math.Min(Height, area.Height);
 
             if (ViewModel?.SelectedTabIndex == 1)

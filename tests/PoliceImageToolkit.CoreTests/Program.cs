@@ -31,7 +31,9 @@ var tests = new (string Name, Action Execute)[]
     ("截圖流水號不補空號且還原依時間序插回不蓋過最新對照", VideoSnapshot_DoesNotReuseDeletedSequenceAndRestoresInOrder),
     ("影片倍速切換與最後分頁偏好設定讀寫", VideoSnapshotViewModel_CyclesPlaybackSpeedAndSavesTabPreference),
     ("更新服務可正確比對版本並只允許 HTTPS 下載網址", UpdateService_ComparesSemanticVersionsAndValidatesHttpsUrls),
-    ("偏好設定服務可正常讀寫並在設定損毀時退回預設值", UserSettingsService_RoundTripsAndHandlesCorruptedFile)
+    ("偏好設定服務可正常讀寫並在設定損毀時退回預設值", UserSettingsService_RoundTripsAndHandlesCorruptedFile),
+    ("JPG 轉檔保留 EXIF 拍攝時間與機型、歸正方向且原圖預覽正確旋轉", ImageConversion_PreservesExifDateAndPreviewOrients),
+    ("縮圖背景載入可取消且不鎖定來源檔案", ImageConverterViewModel_CancelsThumbnailsWithoutLockingFiles)
 };
 
 int failed = 0;
@@ -246,6 +248,89 @@ static void ImageConversion_AutoOrientsExifAndScalesMaxDimension()
         AssertTrue(task.Status == PoliceImageToolkit.Models.TaskStatus.Success, "Exif 旋轉與縮放轉檔應成功");
         AssertEqual(10, task.OutputWidth, "順時針 90 度並縮放長邊至 20 後寬度");
         AssertEqual(20, task.OutputHeight, "順時針 90 度並縮放長邊至 20 後高度");
+    }
+    finally
+    {
+        CleanupTempDir(directory);
+    }
+}
+
+static void ImageConversion_PreservesExifDateAndPreviewOrients()
+{
+    string directory = CreateTempDir();
+    try
+    {
+        Directory.CreateDirectory(directory);
+        string jpgPath = Path.Combine(directory, "exif_rotated.jpg");
+
+        var metadata = new BitmapMetadata("jpg");
+        metadata.SetQuery("/app1/ifd/{ushort=274}", (ushort)6);
+        metadata.SetQuery("/app1/ifd/exif:{ushort=36867}", "2026:11:25 10:30:00");
+        metadata.SetQuery("/app1/ifd/{ushort=271}", "Apple");
+        metadata.SetQuery("/app1/ifd/{ushort=272}", "iPhone 16 Pro");
+
+        var encoder = new JpegBitmapEncoder { QualityLevel = 95 };
+        encoder.Frames.Add(BitmapFrame.Create(CreateTestBitmap(40, 20), null, metadata, null));
+        using (var fs = new FileStream(jpgPath, FileMode.CreateNew, FileAccess.Write, FileShare.None))
+        {
+            encoder.Save(fs);
+        }
+
+        // 1. 驗證原圖預覽輔助會依 Exif Orientation 歸正尺寸（40x20 -> 20x40）
+        BitmapSource preview = ImageService.LoadOrientedBitmap(jpgPath);
+        AssertEqual(20, preview.PixelWidth, "原圖預覽旋轉後寬度");
+        AssertEqual(40, preview.PixelHeight, "原圖預覽旋轉後高度");
+
+        // 2. 驗證轉為 JPG 後保留拍攝時間與機型，且 Orientation 歸正為 1
+        string outDir = Path.Combine(directory, "Out");
+        var service = new ImageService();
+        var task = CreateImageTask(jpgPath);
+        service.ConvertAsync(task, new ImageConvertOptions("JPG", 92, outDir, AutoOrient: true, MaxDimension: 0)).GetAwaiter().GetResult();
+
+        AssertTrue(task.Status == PoliceImageToolkit.Models.TaskStatus.Success, "保留 EXIF 之 JPG 轉檔應成功");
+        AssertEqual(20, task.OutputWidth, "JPG 旋轉歸正後寬度");
+        AssertEqual(40, task.OutputHeight, "JPG 旋轉歸正後高度");
+
+        using var outFs = new FileStream(task.OutputPath, FileMode.Open, FileAccess.Read, FileShare.Read);
+        var outDecoder = BitmapDecoder.Create(outFs, BitmapCreateOptions.PreservePixelFormat, BitmapCacheOption.OnLoad);
+        var outMeta = outDecoder.Frames[0].Metadata as BitmapMetadata;
+        AssertTrue(outMeta != null, "輸出 JPG 應包含 EXIF Metadata");
+        AssertEqual("2026:11:25 10:30:00", outMeta!.GetQuery("/app1/ifd/exif:{ushort=36867}")?.ToString() ?? "", "輸出 JPG 應保留 DateTimeOriginal");
+        AssertEqual("iPhone 16 Pro", outMeta.GetQuery("/app1/ifd/{ushort=272}")?.ToString() ?? "", "輸出 JPG 應保留裝置型號");
+        AssertEqual(1, Convert.ToInt32(outMeta.GetQuery("/app1/ifd/{ushort=274}")), "自動旋轉後輸出 Orientation 必須歸正為 1");
+    }
+    finally
+    {
+        CleanupTempDir(directory);
+    }
+}
+
+static void ImageConverterViewModel_CancelsThumbnailsWithoutLockingFiles()
+{
+    string directory = CreateTempDir();
+    try
+    {
+        Directory.CreateDirectory(directory);
+        var paths = new List<string>();
+        for (int i = 0; i < 12; i++)
+        {
+            string p = Path.Combine(directory, $"thumb_{i}.png");
+            SaveTestBitmap(p, new PngBitmapEncoder());
+            paths.Add(p);
+        }
+
+        var vm = new ImageConverterViewModel(new ImageService(), new OutputIndexService());
+        int added = vm.AddFiles(paths);
+        AssertEqual(12, added, "應加入 12 張圖片");
+        vm.ClearAllCommand.Execute(null);
+        AssertEqual(0, vm.Tasks.Count, "清空清單後任務數應為 0");
+
+        // 清空後立即刪除原檔不得因縮圖執行緒鎖檔而拋出 IOException
+        foreach (string p in paths)
+        {
+            File.Delete(p);
+        }
+        AssertTrue(paths.All(p => !File.Exists(p)), "縮圖取消後所有來源檔皆應可立即刪除");
     }
     finally
     {

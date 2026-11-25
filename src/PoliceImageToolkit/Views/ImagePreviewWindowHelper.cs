@@ -3,6 +3,7 @@ using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
+using PoliceImageToolkit.Services;
 
 namespace PoliceImageToolkit.Views;
 
@@ -18,12 +19,7 @@ internal static class ImagePreviewWindowHelper
         double defaultHeight,
         Action onClosed)
     {
-        var bitmap = new BitmapImage();
-        bitmap.BeginInit();
-        bitmap.CacheOption = BitmapCacheOption.OnLoad;
-        bitmap.UriSource = new Uri(imagePath);
-        bitmap.EndInit();
-        bitmap.Freeze();
+        BitmapSource bitmap = ImageService.LoadOrientedBitmap(imagePath);
 
         var image = new Image { Source = bitmap, Stretch = Stretch.Uniform };
         var scroll = new ScrollViewer
@@ -31,12 +27,13 @@ internal static class ImagePreviewWindowHelper
             Content = image,
             HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled,
             VerticalScrollBarVisibility = ScrollBarVisibility.Disabled,
-            Background = Brushes.Black
+            Background = GetBrush("PhoneScreenColor", Color.FromRgb(15, 23, 42))
         };
 
         string groupName = $"Zoom_{Guid.NewGuid():N}";
-        var fitBtn = new RadioButton { Content = "符合視窗", IsChecked = true, GroupName = groupName, Margin = new Thickness(0, 0, 6, 0) };
-        var actualBtn = new RadioButton { Content = "100% 原尺寸", GroupName = groupName, Margin = new Thickness(0, 0, 12, 0) };
+        var radioStyle = Application.Current?.TryFindResource("SegmentedRadioStyle") as Style;
+        var fitBtn = new RadioButton { Content = "符合視窗", IsChecked = true, GroupName = groupName, Margin = new Thickness(0, 0, 6, 0), Style = radioStyle };
+        var actualBtn = new RadioButton { Content = "100% 原尺寸", GroupName = groupName, Margin = new Thickness(0, 0, 12, 0), Style = radioStyle };
         fitBtn.Checked += (_, _) =>
         {
             image.Stretch = Stretch.Uniform;
@@ -52,17 +49,17 @@ internal static class ImagePreviewWindowHelper
 
         var topBar = new Border
         {
-            Background = Brushes.White,
+            Background = GetBrush("BgInset", Color.FromRgb(238, 245, 252)),
             Padding = new Thickness(12, 8, 12, 8),
-            BorderBrush = new SolidColorBrush(Color.FromRgb(215, 222, 232)),
-            BorderThickness = new Thickness(0, 0, 0, 1)
+            BorderBrush = GetBrush("InkSoft", Color.FromRgb(36, 54, 86)),
+            BorderThickness = new Thickness(0, 0, 0, 2)
         };
         var dock = new DockPanel();
         var hint = new TextBlock
         {
             Text = $"{bitmap.PixelWidth} × {bitmap.PixelHeight}{rightHintSuffix}",
             VerticalAlignment = VerticalAlignment.Center,
-            Foreground = new SolidColorBrush(Color.FromRgb(71, 85, 105))
+            Foreground = GetBrush("TextSecondary", Color.FromRgb(74, 95, 127))
         };
         DockPanel.SetDock(hint, Dock.Right);
         var controls = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center };
@@ -108,5 +105,16 @@ internal static class ImagePreviewWindowHelper
         window.Closed += (_, _) => onClosed();
         window.Show();
         return window;
+    }
+
+    private static Brush GetBrush(string resourceKey, Color fallback)
+    {
+        if (Application.Current?.TryFindResource(resourceKey) is Brush brush)
+        {
+            return brush;
+        }
+        var solid = new SolidColorBrush(fallback);
+        solid.Freeze();
+        return solid;
     }
 }
